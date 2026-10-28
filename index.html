@@ -95,10 +95,38 @@
   </main>
 
   <script>
+    const sleep = ms =>
+      new Promise(resolve => setTimeout(resolve, ms));
+
+    async function readResponse(response) {
+      const text = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(
+          "सर्वर से सही JSON जवाब नहीं मिला। कृपया Logs जाँचें।"
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || `API Error: ${response.status}`
+        );
+      }
+
+      return data;
+    }
+
     async function generateApp() {
-      const appName = document.getElementById("appname").value.trim();
-      const appType = document.getElementById("apptype").value;
-      const features = document.getElementById("features").value.trim();
+      const appName =
+        document.getElementById("appname").value.trim();
+      const appType =
+        document.getElementById("apptype").value;
+      const features =
+        document.getElementById("features").value.trim();
+
       const button = document.getElementById("generateBtn");
       const result = document.getElementById("result");
       const output = document.getElementById("output");
@@ -112,34 +140,72 @@
       button.disabled = true;
       button.textContent = "AI जवाब तैयार कर रहा है...";
       result.style.display = "block";
-      title.textContent = "कृपया इंतज़ार करें";
+      title.textContent = "काम शुरू हो गया";
       output.textContent = "Gemini AI से संपर्क हो रहा है...";
 
       try {
-        const response = await fetch("/api/generate", {
+        const startResponse = await fetch("/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ appName, appType, features })
         });
 
-        const data = await response.json();
+        const task = await readResponse(startResponse);
 
-        if (!response.ok) {
-          throw new Error(data.error || "API अनुरोध सफल नहीं हुआ।");
+        // Support a direct completed result if returned by the API.
+        let answer = task.result || task.output || task.text;
+
+        if (!answer && task.id) {
+          title.textContent = "AI जवाब तैयार कर रहा है";
+
+          // Check background task status for up to 3 minutes.
+          for (let attempt = 0; attempt < 90; attempt++) {
+            output.textContent =
+              `Gemini काम कर रहा है... (${attempt + 1}/90)\n` +
+              "कृपया यह पेज खुला रखें।";
+
+            await sleep(2000);
+
+            const statusResponse = await fetch(
+              "/api/generate?id=" + encodeURIComponent(task.id),
+              { method: "GET", cache: "no-store" }
+            );
+
+            const statusData = await readResponse(statusResponse);
+
+            if (statusData.status === "completed") {
+              answer =
+                statusData.result ||
+                statusData.output ||
+                statusData.text;
+              break;
+            }
+
+            if (
+              statusData.status === "failed" ||
+              statusData.status === "cancelled"
+            ) {
+              throw new Error(
+                statusData.error || "Gemini का काम पूरा नहीं हुआ।"
+              );
+            }
+          }
         }
 
-        const answer = data.result || data.text || data.output;
         if (!answer) {
-          throw new Error("API से जवाब मिला, लेकिन उसमें टेक्स्ट नहीं है।");
+          throw new Error(
+            "3 मिनट में जवाब नहीं मिला। कृपया Runtime Logs जाँचें।"
+          );
         }
 
         title.textContent = "AI का जवाब";
         output.textContent = answer;
+
       } catch (error) {
         title.textContent = "त्रुटि";
         output.textContent =
-          error.message +
-          "\n\nVercel में API फ़ंक्शन, Environment Variable और Deployment की जाँच करें।";
+          error.message ||
+          "अनुरोध पूरा नहीं हुआ। कृपया Runtime Logs जाँचें।";
       } finally {
         button.disabled = false;
         button.textContent = "AI से ऐप का कोड बनवाएँ";
@@ -148,6 +214,7 @@
 
     async function copyResult() {
       const text = document.getElementById("output").textContent;
+
       try {
         await navigator.clipboard.writeText(text);
         alert("जवाब कॉपी हो गया!");
