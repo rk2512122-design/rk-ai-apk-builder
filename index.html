@@ -15,7 +15,7 @@
       color: white;
     }
     .card {
-      max-width: 560px;
+      max-width: 600px;
       margin: 20px auto;
       padding: 22px;
       background: #172238;
@@ -43,14 +43,15 @@
       font-weight: bold;
       cursor: pointer;
     }
+    button:disabled { opacity: .6; }
     #result {
-      display: none;
       margin-top: 20px;
       padding: 14px;
       background: #0b1220;
       border-radius: 10px;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+      display: none;
     }
     .note { color: #c3d0e4; font-size: 14px; }
   </style>
@@ -58,7 +59,7 @@
 <body>
   <main class="card">
     <h1>⚡ RK AI APK Builder</h1>
-    <p>अपना ऐप बनाने का आइडिया लिखें।</p>
+    <p>अपने Android ऐप का आइडिया लिखें। AI से कोड और प्रोजेक्ट की योजना तैयार करवाएँ।</p>
 
     <label for="appname">ऐप का नाम</label>
     <input id="appname" placeholder="जैसे: My Study App">
@@ -75,51 +76,83 @@
 
     <label for="features">ऐप में क्या-क्या चाहिए?</label>
     <textarea id="features" rows="5"
-      placeholder="ऐप की सुविधाएँ यहाँ लिखें"></textarea>
+      placeholder="जैसे: Login screen, home screen, quiz"></textarea>
 
-    <button onclick="makeRequest()">ऐप बनाने का अनुरोध तैयार करें</button>
+    <button id="generateBtn" onclick="generateApp()">
+      AI से ऐप का कोड बनवाएँ
+    </button>
 
     <section id="result">
-      <strong>आपके ऐप का अनुरोध:</strong>
-      <p id="summary"></p>
-      <button onclick="copyRequest()">अनुरोध कॉपी करें</button>
+      <strong id="resultTitle">AI का जवाब</strong>
+      <p id="output"></p>
+      <button onclick="copyResult()">जवाब कॉपी करें</button>
     </section>
 
     <p class="note">
-      अगला चरण: सुरक्षित AI सेवा से कोड बनाना और Android APK बिल्ड करना।
+      ध्यान दें: AI से कोड मिलना अपने-आप installable APK बनने की गारंटी नहीं है।
+      APK बनाने के लिए Android प्रोजेक्ट को बिल्ड करना होगा।
     </p>
   </main>
 
   <script>
-    let requestText = "";
-
-    function makeRequest() {
-      const name = document.getElementById("appname").value.trim();
-      const type = document.getElementById("apptype").value;
+    async function generateApp() {
+      const appName = document.getElementById("appname").value.trim();
+      const appType = document.getElementById("apptype").value;
       const features = document.getElementById("features").value.trim();
+      const button = document.getElementById("generateBtn");
+      const result = document.getElementById("result");
+      const output = document.getElementById("output");
+      const title = document.getElementById("resultTitle");
 
-      if (!name || !features) {
-        alert("कृपया ऐप का नाम और उसकी सुविधाएँ लिखें।");
+      if (!appName || !features) {
+        alert("कृपया ऐप का नाम और फीचर्स लिखें।");
         return;
       }
 
-      requestText =
-        "Create a complete Android app project.\n" +
-        "App name: " + name + "\n" +
-        "App type: " + type + "\n" +
-        "Required features: " + features + "\n" +
-        "Generate Android source code and build an installable APK.";
+      button.disabled = true;
+      button.textContent = "AI जवाब तैयार कर रहा है...";
+      result.style.display = "block";
+      title.textContent = "कृपया इंतज़ार करें";
+      output.textContent = "Gemini AI से संपर्क हो रहा है...";
 
-      document.getElementById("summary").textContent = requestText;
-      document.getElementById("result").style.display = "block";
+      try {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ appName, appType, features })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "API अनुरोध सफल नहीं हुआ।");
+        }
+
+        const answer = data.result || data.text || data.output;
+        if (!answer) {
+          throw new Error("API से जवाब मिला, लेकिन उसमें टेक्स्ट नहीं है।");
+        }
+
+        title.textContent = "AI का जवाब";
+        output.textContent = answer;
+      } catch (error) {
+        title.textContent = "त्रुटि";
+        output.textContent =
+          error.message +
+          "\n\nVercel में API फ़ंक्शन, Environment Variable और Deployment की जाँच करें।";
+      } finally {
+        button.disabled = false;
+        button.textContent = "AI से ऐप का कोड बनवाएँ";
+      }
     }
 
-    async function copyRequest() {
+    async function copyResult() {
+      const text = document.getElementById("output").textContent;
       try {
-        await navigator.clipboard.writeText(requestText);
-        alert("अनुरोध कॉपी हो गया।");
-      } catch (e) {
-        alert("अनुरोध कॉपी नहीं हुआ। टेक्स्ट को दबाकर कॉपी करें।");
+        await navigator.clipboard.writeText(text);
+        alert("जवाब कॉपी हो गया!");
+      } catch {
+        alert("जवाब को चुनकर कॉपी करें।");
       }
     }
   </script>
