@@ -32,11 +32,11 @@ Required features: ${features}
 
 Provide:
 1. Android project file structure.
-2. Complete source code for each important file.
+2. Source code for important files.
 3. Required Gradle configuration.
 4. Instructions to build and install the APK.
 
-Do not claim an APK has been built.
+Do not claim an APK has already been built.
 Return a clear, practical answer.
 `;
 
@@ -59,20 +59,36 @@ Return a clear, practical answer.
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data.error?.message || "Gemini API request failed."
+        error:
+          data.error?.message ||
+          "Gemini API request failed."
       });
     }
 
-    const result = data.output_text;
+    let result = data.output_text;
+
+    if (!result && Array.isArray(data.steps)) {
+      result = data.steps
+        .filter(step => step.type === "model_output")
+        .flatMap(step => step.content || [])
+        .filter(item => item.type === "text")
+        .map(item => item.text || "")
+        .filter(Boolean)
+        .join("\n");
+    }
 
     if (!result) {
       return res.status(502).json({
-        error: "Gemini returned no text. Please try again."
+        error: "Gemini returned no readable text.",
+        responseKeys: Object.keys(data)
       });
     }
 
     return res.status(200).json({ result });
+
   } catch (error) {
+    console.error("Generate API error:", error);
+
     return res.status(500).json({
       error: error.message || "Unexpected server error."
     });
