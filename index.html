@@ -2,108 +2,126 @@
 <!DOCTYPE html>
 <html lang="hi">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RK AI APK Builder</title>
-<style>
-*{box-sizing:border-box}
-body{
-  margin:0;padding:20px;
-  font-family:Arial,sans-serif;
-  background:#0b1220;color:white;
-}
-.card{
-  max-width:520px;margin:30px auto;
-  padding:24px;background:#172238;
-  border:1px solid #30415e;border-radius:20px;
-}
-h1{color:#67b7ff;text-align:center}
-p{color:#c4d0e0;text-align:center}
-label{display:block;margin-top:18px}
-input,select,textarea,button{
-  width:100%;padding:13px;margin-top:8px;
-  border-radius:10px;font-size:16px;
-}
-input,select,textarea{
-  background:#0b1220;color:white;
-  border:1px solid #40516e;
-}
-button{
-  border:0;background:#1685ee;color:white;
-  font-weight:bold;margin-top:22px;
-}
-#result{
-  margin-top:20px;padding:14px;
-  background:#0b1220;border-radius:10px;
-  overflow-wrap:anywhere;display:none;
-}
-small{color:#9fb0c7}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RK AI APK Builder</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background: #0b1220;
+      color: white;
+    }
+    .card {
+      max-width: 560px;
+      margin: 20px auto;
+      padding: 22px;
+      background: #172238;
+      border-radius: 16px;
+    }
+    h1 { color: #18e5ee; text-align: center; }
+    p { line-height: 1.6; }
+    label { display: block; margin-top: 18px; }
+    input, textarea, select, button {
+      width: 100%;
+      padding: 13px;
+      margin-top: 8px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    input, textarea, select {
+      background: #0b1220;
+      color: white;
+      border: 1px solid #40516e;
+    }
+    button {
+      border: 0;
+      background: #18bfc9;
+      color: #07111e;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #result {
+      display: none;
+      margin-top: 20px;
+      padding: 14px;
+      background: #0b1220;
+      border-radius: 10px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .note { color: #c3d0e4; font-size: 14px; }
+  </style>
 </head>
 <body>
-<div class="card">
-  <h1>⚡ RK AI APK Builder</h1>
-  <p>अपना ऐप बताइए और प्रोजेक्ट बनाने की शुरुआत कीजिए।</p>
+  <main class="card">
+    <h1>⚡ RK AI APK Builder</h1>
+    <p>अपना ऐप बनाने का आइडिया लिखें।</p>
 
-  <label>ऐप का नाम</label>
-  <input id="appname" placeholder="जैसे RK Flashlight">
+    <label for="appname">ऐप का नाम</label>
+    <input id="appname" placeholder="जैसे: My Study App">
 
-  <label>ऐप किस प्रकार का है?</label>
-  <select id="apptype">
-    <option>Flashlight</option>
-    <option>Calculator</option>
-    <option>Music Player</option>
-    <option>Education App</option>
-    <option>Game</option>
-    <option>Other Android App</option>
-  </select>
+    <label for="apptype">ऐप का प्रकार</label>
+    <select id="apptype">
+      <option>Education App</option>
+      <option>Calculator</option>
+      <option>Music Player</option>
+      <option>Game</option>
+      <option>Business App</option>
+      <option>Other Android App</option>
+    </select>
 
-  <label>ऐप में क्या-क्या होना चाहिए?</label>
-  <textarea id="features" rows="4"
-  placeholder="अपने ऐप के फीचर यहाँ लिखें"></textarea>
+    <label for="features">ऐप में क्या-क्या चाहिए?</label>
+    <textarea id="features" rows="5"
+      placeholder="ऐप की सुविधाएँ यहाँ लिखें"></textarea>
 
-  <button onclick="makeRequest()">प्रोजेक्ट अनुरोध बनाएँ</button>
+    <button onclick="makeRequest()">ऐप बनाने का अनुरोध तैयार करें</button>
 
-  <div id="result">
-    <strong>आपका प्रोजेक्ट अनुरोध तैयार है</strong>
-    <p id="summary"></p>
-    <button onclick="copyRequest()">अनुरोध कॉपी करें</button>
-    <small>ध्यान दें: यह अनुरोध तैयार करता है। APK बनाने के लिए AI और Android बिल्ड सर्वर जोड़ना बाकी है।</small>
-  </div>
-</div>
+    <section id="result">
+      <strong>आपके ऐप का अनुरोध:</strong>
+      <p id="summary"></p>
+      <button onclick="copyRequest()">अनुरोध कॉपी करें</button>
+    </section>
 
-<script>
-let requestText = "";
+    <p class="note">
+      अगला चरण: सुरक्षित AI सेवा से कोड बनाना और Android APK बिल्ड करना।
+    </p>
+  </main>
 
-function makeRequest(){
-  const name = document.getElementById("appname").value.trim();
-  const type = document.getElementById("apptype").value;
-  const features = document.getElementById("features").value.trim();
+  <script>
+    let requestText = "";
 
-  if(!name){
-    alert("पहले ऐप का नाम लिखें।");
-    return;
-  }
+    function makeRequest() {
+      const name = document.getElementById("appname").value.trim();
+      const type = document.getElementById("apptype").value;
+      const features = document.getElementById("features").value.trim();
 
-  requestText =
-    "Create a complete Android APK project.\n" +
-    "App name: " + name + "\n" +
-    "App type: " + type + "\n" +
-    "Required features: " + (features || "Suggest basic features") +
-    "\nInclude Android source code, build files, and instructions to create an installable APK.";
+      if (!name || !features) {
+        alert("कृपया ऐप का नाम और उसकी सुविधाएँ लिखें।");
+        return;
+      }
 
-  document.getElementById("summary").textContent = requestText;
-  document.getElementById("result").style.display = "block";
-}
+      requestText =
+        "Create a complete Android app project.\n" +
+        "App name: " + name + "\n" +
+        "App type: " + type + "\n" +
+        "Required features: " + features + "\n" +
+        "Generate Android source code and build an installable APK.";
 
-async function copyRequest(){
-  try{
-    await navigator.clipboard.writeText(requestText);
-    alert("प्रोजेक्ट अनुरोध कॉपी हो गया!");
-  }catch(e){
-    alert("अनुरोध को चुनकर कॉपी करें।");
-  }
-}
-</script>
+      document.getElementById("summary").textContent = requestText;
+      document.getElementById("result").style.display = "block";
+    }
+
+    async function copyRequest() {
+      try {
+        await navigator.clipboard.writeText(requestText);
+        alert("अनुरोध कॉपी हो गया।");
+      } catch (e) {
+        alert("अनुरोध कॉपी नहीं हुआ। टेक्स्ट को दबाकर कॉपी करें।");
+      }
+    }
+  </script>
 </body>
 </html>
