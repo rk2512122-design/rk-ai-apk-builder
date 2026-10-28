@@ -16,24 +16,17 @@ jobs:
       - name: Download project files
         uses: actions/checkout@v4
 
-      - name: Check Android project
-        run: |
-          if [ ! -f "gradlew" ]; then
-            echo "Android project is not ready yet."
-            echo "The repository currently needs an Android Gradle project."
-            exit 1
-          fi
-
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Build debug APK
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
