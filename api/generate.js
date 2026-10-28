@@ -10,34 +10,43 @@ export default async function handler(req, res) {
 
   if (!apiKey) {
     return res.status(500).json({
-      error: "GEMINI_API_KEY is missing in Vercel Environment Variables."
+      error: "GEMINI_API_KEY is missing in Vercel."
     });
   }
 
   try {
     const { appName, appType, features } = req.body || {};
 
-    if (!appName || !appType || !features) {
+    if (
+      typeof appName !== "string" ||
+      typeof appType !== "string" ||
+      typeof features !== "string" ||
+      !appName.trim() ||
+      !appType.trim() ||
+      !features.trim()
+    ) {
       return res.status(400).json({
-        error: "Please provide appName, appType and features."
+        error: "Please enter the app name, type and features."
       });
     }
 
     const prompt = `
-Create an Android app project plan and source code.
+Create an original Android app project plan and source code.
 
-App name: ${appName}
-App type: ${appType}
-Required features: ${features}
+App name: ${appName.trim()}
+App type: ${appType.trim()}
+Requested features: ${features.trim()}
 
-Provide:
-1. Android project file structure.
-2. Source code for important files.
-3. Required Gradle configuration.
-4. Instructions to build and install the APK.
+Write original content. Do not reproduce copyrighted text
+or third-party source code.
 
-Do not claim an APK has already been built.
-Return a clear, practical answer.
+Include:
+1. Android project structure.
+2. Main source code files.
+3. Gradle configuration.
+4. Steps to build the project and generate an APK.
+
+Be concise and practical. Do not claim an APK was built.
 `;
 
     const response = await fetch(
@@ -50,37 +59,50 @@ Return a clear, practical answer.
         },
         body: JSON.stringify({
           model: "gemini-3.8-flash",
-          input: prompt
-        })
+          input: prompt,
+          generation_config: {
+            thinking_level: "low",
+            max_output_tokens: 2048
+          }
+        }),
+        signal: AbortSignal.timeout(25000)
       }
     );
 
-    const data = await response.json();
+    const raw = await response.text();
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error:
-          data.error?.message ||
-          "Gemini API request failed."
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return res.status(502).json({
+        error: "Gemini returned an unreadable response."
       });
     }
 
-    let result = data.output_text;
-
-    if (!result && Array.isArray(data.steps)) {
-      result = data.steps
-        .filter(step => step.type === "model_output")
-        .flatMap(step => step.content || [])
-        .filter(item => item.type === "text")
-        .map(item => item.text || "")
-        .filter(Boolean)
-        .join("\n");
+    if (!response.ok) {
+      return res.status(502).json({
+        error:
+          data.error?.message ||
+          `Gemini API returned HTTP ${response.status}.`
+      });
     }
+
+    const result =
+      data.output_text ||
+      (Array.isArray(data.steps)
+        ? data.steps
+            .filter(step => step.type === "model_output")
+            .flatMap(step => step.content || [])
+            .filter(item => item.type === "text")
+            .map(item => item.text || "")
+            .filter(Boolean)
+            .join("\n")
+        : "");
 
     if (!result) {
       return res.status(502).json({
-        error: "Gemini returned no readable text.",
-        responseKeys: Object.keys(data)
+        error: "Gemini returned no text. Please try again."
       });
     }
 
@@ -88,6 +110,13 @@ Return a clear, practical answer.
 
   } catch (error) {
     console.error("Generate API error:", error);
+
+    if (error.name === "TimeoutError" ||
+        error.name === "AbortError") {
+      return res.status(504).json({
+        error: "Gemini timed out. Please try again."
+      });
+    }
 
     return res.status(500).json({
       error: error.message || "Unexpected server error."
