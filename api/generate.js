@@ -4,75 +4,115 @@ export default async function handler(req, res) {
 
   if (!apiKey) {
     return res.status(500).json({
-      error: "GEMINI_API_KEY is missing in Vercel."
+      error: "GEMINI_API_KEY is not configured in Vercel."
     });
   }
 
   const baseUrl =
     "https://generativelanguage.googleapis.com/v1beta/interactions";
 
+  const headers = {
+    "x-goog-api-key": apiKey,
+    "Api-Revision": "2026-05-20"
+  };
+
+  async function readResponse(response) {
+    const raw = await response.text();
+
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { message: raw.slice(0, 500) };
+    }
+  }
+
   try {
-    // Check the status of an existing background task.
     if (req.method === "GET") {
       const id = req.query?.id;
 
-      if (!id || typeof id !== "string") {
+      if (!id) {
         return res.status(400).json({
-          error: "Interaction ID is required."
+          error: "Missing interaction ID."
         });
       }
 
       const response = await fetch(
         `${baseUrl}/${encodeURIComponent(id)}`,
         {
-          headers: {
-            "x-goog-api-key": apiKey
-          },
-          signal: AbortSignal.timeout(10000)
+          method: "GET",
+          headers,
+          signal: AbortSignal.timeout(15000)
         }
       );
 
-      const text = await response.text();
-      let data;
-
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = {};
-      }
+      const data = await readResponse(response);
 
       if (!response.ok) {
-        return res.status(response.status).json({
-          error:
-            data.error?.message ||
-            "Could not check Gemini task status."
+        console.error("Gemini poll error:", response.status, data);
+
+        return res.status(502).json({
+          error: "Gemini status check failed.",
+          details: data.error?.message || data.message ||
+            `Google API returned HTTP ${response.status}.`
         });
       }
 
-      const status = data.status || "in_progress";
+      const status =
+        typeof data.status === "string" ? data.status : "";
+
+      console.log("Gemini interaction poll:", {
+        status: status || "MISSING",
+        responseKeys: Object.keys(data)
+      });
+
+      if (!status) {
+        return res.status(502).json({
+          error: "Gemini response did not contain a status.",
+          responseKeys: Object.keys(data)
+        });
+      }
 
       if (status === "completed") {
         let output = data.output_text || "";
 
         if (!output && Array.isArray(data.steps)) {
-          output = data.steps
-            .filter(step => step.type === "model_output")
-            .flatMap(step => step.content || [])
-            .filter(item => item.type === "text")
-            .map(item => item.text || "")
-            .join("\n");
+          for (const step of data.steps) {
+            if (
+              step.type === "model_output" &&
+              typeof step.text === "string"
+            ) {
+              output += step.text;
+            }
+
+            if (Array.isArray(step.content)) {
+              for (const item of step.content) {
+                if (typeof item.text === "string") {
+                  output += item.text;
+                }
+              }
+            }
+          }
+        }
+
+        if (!output && Array.isArray(data.outputs)) {
+          for (const item of data.outputs) {
+            if (typeof item.text === "string") {
+              output += item.text;
+            }
+          }
         }
 
         if (!output) {
           return res.status(502).json({
-            error: "Gemini completed without returning text."
+            error: "Gemini completed but no text output was found.",
+            responseKeys: Object.keys(data)
           });
         }
 
         return res.status(200).json({
           status: "completed",
-          result: output,
-          output: output
+          id,
+          output
         });
       }
 
@@ -81,58 +121,63 @@ export default async function handler(req, res) {
           status,
           error:
             data.error?.message ||
-            `Gemini task ${status}. Please try again.`
+            data.message ||
+            `Gemini task ended with status: ${status}.`
+        });
+      }
+
+      if (status !== "in_progress") {
+        return res.status(502).json({
+          error: `Unexpected Gemini status: ${status}`,
+          responseKeys: Object.keys(data)
         });
       }
 
       return res.status(200).json({
-        status: status,
-        id: data.id || id
+        status: "in_progress",
+        id
       });
     }
 
-    // Start a new background task.
     if (req.method !== "POST") {
+      res.setHeader("Allow", "GET, POST");
+
       return res.status(405).json({
-        error: "Only POST and GET requests are allowed."
+        error: "Method not allowed."
       });
     }
 
     const { appName, appType, features } = req.body || {};
 
-    if (
-      typeof appName !== "string" ||
-      typeof appType !== "string" ||
-      typeof features !== "string" ||
-      !appName.trim() ||
-      !appType.trim() ||
-      !features.trim()
-    ) {
+    if (!appName || !appType || !features) {
       return res.status(400).json({
-        error: "Please enter the app name, app type, and features."
+        error: "App name, app type and features are required."
       });
     }
 
     const prompt = `
-Create an original Android app project plan and basic source code.
+Create a practical Android app project specification and source code.
 
-App name: ${appName.trim()}
-App type: ${appType.trim()}
-Required features: ${features.trim()}
+App name: ${String(appName).slice(0, 100)}
+App type: ${String(appType).slice(0, 100)}
+Requested features: ${String(features).slice(0, 4000)}
 
-Requirements:
-- Use original content.
-- Do not copy copyrighted apps or source code.
-- Give a concise project plan and basic Android source code.
-- Explain how to build the project.
-- Do not claim an APK has been built unless it actually has.
+Return:
+1. Project file structure.
+2. AndroidManifest.xml.
+3. Gradle configuration.
+4. MainActivity source code.
+5. Instructions to build a debug APK.
+
+Be concise but include usable code.
+Do not claim that an APK has already been built.
 `;
 
     const response = await fetch(baseUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey
+        ...headers,
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "gemini-3.8-flash",
@@ -143,50 +188,51 @@ Requirements:
           max_output_tokens: 1024
         }
       }),
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(20000)
     });
 
-    const text = await response.text();
-    let data;
-
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = {};
-    }
+    const data = await readResponse(response);
 
     if (!response.ok) {
-      return res.status(response.status).json({
-        error:
-          data.error?.message ||
-          `Gemini API error (${response.status}).`
+      console.error("Gemini start error:", response.status, data);
+
+      return res.status(502).json({
+        error: "Gemini could not start the task.",
+        details: data.error?.message || data.message ||
+          `Google API returned HTTP ${response.status}.`
       });
     }
 
     if (!data.id) {
+      console.error("Gemini start response missing ID:", data);
+
       return res.status(502).json({
-        error: "Gemini did not return a task ID."
+        error: "Gemini response did not contain a task ID.",
+        responseKeys: Object.keys(data)
       });
     }
 
+    const status =
+      typeof data.status === "string" ? data.status : "in_progress";
+
+    console.log("Gemini interaction started:", {
+      status,
+      hasId: true,
+      responseKeys: Object.keys(data)
+    });
+
     return res.status(202).json({
-      status: data.status || "in_progress",
+      status,
       id: data.id
     });
   } catch (error) {
-    console.error("Gemini API error:", error);
-
-    if (
-      error.name === "TimeoutError" ||
-      error.name === "AbortError"
-    ) {
-      return res.status(504).json({
-        error: "The request timed out. Please try again."
-      });
-    }
+    console.error("Generate API error:", error);
 
     return res.status(500).json({
-      error: "Unable to connect to Gemini. Please try again."
+      error: "Server error while contacting Gemini.",
+      details: error.name === "TimeoutError"
+        ? "Google API request timed out."
+        : error.message
     });
   }
 }
