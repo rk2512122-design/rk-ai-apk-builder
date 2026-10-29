@@ -9,14 +9,14 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 20px;
+      padding: 16px;
       font-family: Arial, sans-serif;
       background: #0b1220;
       color: white;
     }
     .card {
-      max-width: 600px;
-      margin: 20px auto;
+      max-width: 650px;
+      margin: 16px auto;
       padding: 22px;
       background: #172238;
       border-radius: 16px;
@@ -44,25 +44,36 @@
       cursor: pointer;
     }
     button:disabled { opacity: .6; }
+    #downloadBtn {
+      background: #57e39b;
+      margin-top: 14px;
+    }
     #result {
       margin-top: 20px;
       padding: 14px;
       background: #0b1220;
       border-radius: 10px;
-      white-space: pre-wrap;
       overflow-wrap: anywhere;
       display: none;
     }
+    #output {
+      white-space: pre-wrap;
+      max-height: 500px;
+      overflow: auto;
+      font-size: 13px;
+    }
     .note { color: #c3d0e4; font-size: 14px; }
+    .status { color: #57e39b; }
   </style>
 </head>
 <body>
   <main class="card">
     <h1>⚡ RK AI APK Builder</h1>
-    <p>अपने Android ऐप का आइडिया लिखें। AI से कोड और प्रोजेक्ट की योजना तैयार करवाएँ।</p>
+    <p>अपने Android ऐप का आइडिया लिखें। AI से प्रोजेक्ट फाइलें तैयार करवाएँ और उन्हें ZIP में डाउनलोड करें।</p>
 
     <label for="appname">ऐप का नाम</label>
-    <input id="appname" placeholder="जैसे: My Study App">
+    <input id="appname" maxlength="100"
+      placeholder="जैसे: My Study App">
 
     <label for="apptype">ऐप का प्रकार</label>
     <select id="apptype">
@@ -75,7 +86,7 @@
     </select>
 
     <label for="features">ऐप में क्या-क्या चाहिए?</label>
-    <textarea id="features" rows="5"
+    <textarea id="features" rows="5" maxlength="2500"
       placeholder="जैसे: Login screen, home screen, quiz"></textarea>
 
     <button id="generateBtn" onclick="generateApp()">
@@ -84,144 +95,305 @@
 
     <section id="result">
       <strong id="resultTitle">AI का जवाब</strong>
-      <p id="output"></p>
+      <p id="status" class="status"></p>
+      <pre id="output"></pre>
+      <button id="downloadBtn" onclick="downloadProject()" hidden>
+        Android Project ZIP डाउनलोड करें
+      </button>
       <button onclick="copyResult()">जवाब कॉपी करें</button>
     </section>
 
     <p class="note">
-      ध्यान दें: AI से कोड मिलना अपने-आप installable APK बनने की गारंटी नहीं है।
-      APK बनाने के लिए Android प्रोजेक्ट को बिल्ड करना होगा।
+      नोट: ZIP एक Android प्रोजेक्ट है, APK नहीं। APK बनाने के लिए
+      प्रोजेक्ट को Android build system से सफलतापूर्वक बिल्ड करना होगा।
     </p>
   </main>
 
-  <script>
-    const sleep = ms =>
-      new Promise(resolve => setTimeout(resolve, ms));
+<script>
+let generatedFiles = [];
+let generatedText = "";
 
-    async function readResponse(response) {
-      const text = await response.text();
-      let data;
+async function readResponse(response) {
+  const text = await response.text();
+  let data;
 
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new Error(
-          "सर्वर से सही JSON जवाब नहीं मिला। कृपया Logs जाँचें।"
-        );
-      }
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error("सर्वर का जवाब पढ़ा नहीं जा सका।");
+  }
 
-      if (!response.ok) {
-        throw new Error(
-          data.error || `API Error: ${response.status}`
-        );
-      }
+  if (!response.ok) {
+    throw new Error(data.error || `API Error: ${response.status}`);
+  }
 
-      return data;
+  return data;
+}
+
+function parseProjectFiles(text) {
+  const files = [];
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  let currentPath = "";
+  let inCode = false;
+  let codeLines = [];
+
+  function saveFile() {
+    if (!currentPath || !inCode) return;
+
+    const content = codeLines.join("\n").replace(/\n+$/, "");
+    if (content.trim()) {
+      files.push({ path: currentPath, content });
     }
 
-    async function generateApp() {
-      const appName =
-        document.getElementById("appname").value.trim();
-      const appType =
-        document.getElementById("apptype").value;
-      const features =
-        document.getElementById("features").value.trim();
+    codeLines = [];
+    inCode = false;
+    currentPath = "";
+  }
 
-      const button = document.getElementById("generateBtn");
-      const result = document.getElementById("result");
-      const output = document.getElementById("output");
-      const title = document.getElementById("resultTitle");
+  for (const line of lines) {
+    if (!inCode) {
+      // Accept paths printed as headings or numbered list items.
+      const heading = line.match(
+        /^\s{0,3}(?:#{1,6}\s*)?(?:\d{1,2}[.)]\s*)?`?((?:app\/)?(?:settings\.gradle|build\.gradle|gradle\.properties|app\/build\.gradle|app\/src\/main\/AndroidManifest\.xml|app\/src\/main\/java\/com\/example\/generatedapp\/MainActivity\.java|app\/src\/main\/res\/layout\/activity_main\.xml|app\/src\/main\/res\/values\/(?:strings|colors|styles)\.xml))`?\s*$/i
+      );
 
-      if (!appName || !features) {
-        alert("कृपया ऐप का नाम और फीचर्स लिखें।");
-        return;
+      if (heading) {
+        currentPath = heading[1];
+        continue;
       }
 
-      button.disabled = true;
-      button.textContent = "AI जवाब तैयार कर रहा है...";
-      result.style.display = "block";
-      title.textContent = "काम शुरू हो गया";
-      output.textContent = "Gemini AI से संपर्क हो रहा है...";
-
-      try {
-        const startResponse = await fetch("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ appName, appType, features })
-        });
-
-        const task = await readResponse(startResponse);
-
-        // Support a direct completed result if returned by the API.
-        let answer = task.result || task.output || task.text;
-
-        if (!answer && task.id) {
-          title.textContent = "AI जवाब तैयार कर रहा है";
-
-          // Check background task status for up to 3 minutes.
-          for (let attempt = 0; attempt < 90; attempt++) {
-            output.textContent =
-              `Gemini काम कर रहा है... (${attempt + 1}/90)\n` +
-              "कृपया यह पेज खुला रखें।";
-
-            await sleep(2000);
-
-            const statusResponse = await fetch(
-              "/api/generate?id=" + encodeURIComponent(task.id),
-              { method: "GET", cache: "no-store" }
-            );
-
-            const statusData = await readResponse(statusResponse);
-
-            if (statusData.status === "completed") {
-              answer =
-                statusData.result ||
-                statusData.output ||
-                statusData.text;
-              break;
-            }
-
-            if (
-              statusData.status === "failed" ||
-              statusData.status === "cancelled"
-            ) {
-              throw new Error(
-                statusData.error || "Gemini का काम पूरा नहीं हुआ।"
-              );
-            }
-          }
-        }
-
-        if (!answer) {
-          throw new Error(
-            "3 मिनट में जवाब नहीं मिला। कृपया Runtime Logs जाँचें।"
-          );
-        }
-
-        title.textContent = "AI का जवाब";
-        output.textContent = answer;
-
-      } catch (error) {
-        title.textContent = "त्रुटि";
-        output.textContent =
-          error.message ||
-          "अनुरोध पूरा नहीं हुआ। कृपया Runtime Logs जाँचें।";
-      } finally {
-        button.disabled = false;
-        button.textContent = "AI से ऐप का कोड बनवाएँ";
+      if (line.trim().startsWith("```") && currentPath) {
+        inCode = true;
+        codeLines = [];
       }
+    } else if (line.trim().startsWith("```")) {
+      saveFile();
+    } else {
+      codeLines.push(line);
+    }
+  }
+
+  if (inCode) saveFile();
+
+  // Avoid duplicate file paths; keep the last generated version.
+  const unique = new Map();
+  for (const file of files) {
+    unique.set(file.path, file);
+  }
+
+  return Array.from(unique.values());
+}
+
+async function generateApp() {
+  const appName = document.getElementById("appname").value.trim();
+  const appType = document.getElementById("apptype").value;
+  const features = document.getElementById("features").value.trim();
+
+  const button = document.getElementById("generateBtn");
+  const result = document.getElementById("result");
+  const output = document.getElementById("output");
+  const title = document.getElementById("resultTitle");
+  const status = document.getElementById("status");
+  const downloadBtn = document.getElementById("downloadBtn");
+
+  if (!appName || !features) {
+    alert("कृपया ऐप का नाम और फीचर्स लिखें।");
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "AI जवाब तैयार कर रहा है...";
+  result.style.display = "block";
+  title.textContent = "काम शुरू हो गया";
+  status.textContent = "";
+  output.textContent = "Gemini AI से संपर्क हो रहा है...";
+  downloadBtn.hidden = true;
+  generatedFiles = [];
+  generatedText = "";
+
+  try {
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appName, appType, features })
+    });
+
+    const data = await readResponse(response);
+    const answer = data.output || data.result || data.text;
+
+    if (!answer) {
+      throw new Error("AI ने कोई कोड नहीं लौटाया।");
     }
 
-    async function copyResult() {
-      const text = document.getElementById("output").textContent;
+    generatedText = answer;
+    generatedFiles = parseProjectFiles(answer);
+    output.textContent = answer;
+    title.textContent = "AI का जवाब";
 
-      try {
-        await navigator.clipboard.writeText(text);
-        alert("जवाब कॉपी हो गया!");
-      } catch {
-        alert("जवाब को चुनकर कॉपी करें।");
+    if (data.status === "incomplete" || data.warning) {
+      status.textContent =
+        "चेतावनी: AI आउटपुट अधूरा हो सकता है। इसे बिल्ड न करें।";
+      generatedFiles = [];
+    } else if (generatedFiles.length > 0) {
+      status.textContent =
+        `${generatedFiles.length} फाइलें पहचानी गईं। ZIP डाउनलोड कर सकते हैं।`;
+      downloadBtn.hidden = false;
+    } else {
+      status.textContent =
+        "फाइलों के रास्ते पहचान में नहीं आए। ZIP नहीं बनाई गई।";
+    }
+  } catch (error) {
+    title.textContent = "त्रुटि";
+    status.textContent = "";
+    output.textContent = error.message || "अनुरोध पूरा नहीं हुआ।";
+  } finally {
+    button.disabled = false;
+    button.textContent = "AI से ऐप का कोड बनवाएँ";
+  }
+}
+
+// Create a standard ZIP archive in the browser without external libraries.
+function makeZip(files) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (const byte of bytes) {
+      crc ^= byte;
+      for (let j = 0; j < 8; j++) {
+        crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
       }
     }
-  </script>
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function header(size) {
+    return new Uint8Array(size);
+  }
+
+  function write16(view, pos, value) {
+    view.setUint16(pos, value, true);
+  }
+
+  function write32(view, pos, value) {
+    view.setUint32(pos, value >>> 0, true);
+  }
+
+  for (const file of files) {
+    const name = encoder.encode(file.path);
+    const data = encoder.encode(file.content);
+    const crc = crc32(data);
+
+    const local = header(30 + name.length);
+    const lv = new DataView(local.buffer);
+    write32(lv, 0, 0x04034b50);
+    write16(lv, 4, 20);
+    write16(lv, 6, 0x0800);
+    write16(lv, 8, 0);
+    write32(lv, 14, crc);
+    write32(lv, 18, data.length);
+    write32(lv, 22, data.length);
+    write16(lv, 26, name.length);
+    local.set(name, 30);
+
+    localParts.push(local, data);
+
+    const central = header(46 + name.length);
+    const cv = new DataView(central.buffer);
+    write32(cv, 0, 0x02014b50);
+    write16(cv, 4, 20);
+    write16(cv, 6, 20);
+    write16(cv, 8, 0x0800);
+    write16(cv, 10, 0);
+    write32(cv, 16, crc);
+    write32(cv, 20, data.length);
+    write32(cv, 24, data.length);
+    write16(cv, 28, name.length);
+    write32(cv, 42, offset);
+    central.set(name, 46);
+
+    centralParts.push(central);
+    offset += local.length + data.length;
+  }
+
+  const centralSize = centralParts.reduce(
+    (sum, part) => sum + part.length, 0
+  );
+
+  const end = header(22);
+  const ev = new DataView(end.buffer);
+  write32(ev, 0, 0x06054b50);
+  write16(ev, 8, files.length);
+  write16(ev, 10, files.length);
+  write32(ev, 12, centralSize);
+  write32(ev, 16, offset);
+
+  return new Blob([...localParts, ...centralParts, end], {
+    type: "application/zip"
+  });
+}
+
+function downloadProject() {
+  if (!generatedFiles.length) {
+    alert("डाउनलोड करने के लिए प्रोजेक्ट फाइलें नहीं मिलीं।");
+    return;
+  }
+
+  const required = [
+    "settings.gradle",
+    "build.gradle",
+    "gradle.properties",
+    "app/build.gradle",
+    "app/src/main/AndroidManifest.xml",
+    "app/src/main/java/com/example/generatedapp/MainActivity.java",
+    "app/src/main/res/layout/activity_main.xml",
+    "app/src/main/res/values/strings.xml",
+    "app/src/main/res/values/colors.xml",
+    "app/src/main/res/values/styles.xml"
+  ];
+
+  const paths = new Set(generatedFiles.map(file => file.path));
+  const missing = required.filter(path => !paths.has(path));
+
+  if (missing.length) {
+    alert(
+      "कुछ जरूरी फाइलें नहीं मिलीं:\n" + missing.join("\n") +
+      "\nZIP डाउनलोड हो सकती है, लेकिन प्रोजेक्ट अधूरा रहेगा।"
+    );
+  }
+
+  try {
+    const blob = makeZip(generatedFiles);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeName = (document.getElementById("appname").value.trim()
+      || "AndroidProject")
+      .replace(/[^a-zA-Z0-9_-]+/g, "_");
+
+    link.href = url;
+    link.download = safeName + ".zip";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch (error) {
+    alert("ZIP बनाने में समस्या आई: " + error.message);
+  }
+}
+
+async function copyResult() {
+  const text = document.getElementById("output").textContent;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("जवाब कॉपी हो गया!");
+  } catch {
+    alert("जवाब को चुनकर कॉपी करें।");
+  }
+}
+</script>
 </body>
 </html>
