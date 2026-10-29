@@ -54,7 +54,7 @@ Do not claim an APK has already been built or attached.
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
         {
           method: "POST",
           headers: {
@@ -72,7 +72,7 @@ Do not claim an APK has already been built or attached.
               maxOutputTokens: 1024
             }
           }),
-          signal: AbortSignal.timeout(120000)
+          signal: AbortSignal.timeout(30000)
         }
       );
 
@@ -108,7 +108,7 @@ Do not claim an APK has already been built or attached.
           attempt < maxAttempts
         ) {
           await new Promise(resolve =>
-            setTimeout(resolve, attempt * 1500)
+            setTimeout(resolve, attempt * 1000)
           );
           continue;
         }
