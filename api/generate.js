@@ -64,11 +64,22 @@ Do not claim an APK has already been built or attached.
             maxOutputTokens: 1024
           }
         }),
-        signal: AbortSignal.timeout(45000)
+        signal: AbortSignal.timeout(120000)
       }
     );
 
-    const data = await response.json();
+    let data;
+
+    try {
+      data = await response.json();
+    } catch (parseError) {
+      console.error("Gemini returned invalid JSON:", parseError);
+
+      return res.status(502).json({
+        error: "Gemini returned an invalid response.",
+        details: "Google API response could not be read as JSON."
+      });
+    }
 
     if (!response.ok) {
       console.error("Gemini API error:", {
@@ -93,7 +104,8 @@ Do not claim an APK has already been built or attached.
     if (!output) {
       return res.status(502).json({
         error: "Gemini returned no text.",
-        details: data.promptFeedback?.blockReason ||
+        details:
+          data.promptFeedback?.blockReason ||
           "No text was found in the response."
       });
     }
@@ -102,17 +114,23 @@ Do not claim an APK has already been built or attached.
       status: "completed",
       output
     });
-  } catch (error) {
-    console.error("Generate API error:", error);
 
-    return res.status(
-      error.name === "TimeoutError" ? 504 : 500
-    ).json({
-      error: "Could not get a response from Gemini.",
-      details:
-        error.name === "TimeoutError"
-          ? "The request took longer than 45 seconds."
-          : error.message
+  } catch (error) {
+    console.error("Generate API error:", {
+      name: error.name,
+      message: error.message,
+      cause: error.cause?.message
+    });
+
+    const timedOut =
+      error.name === "TimeoutError" ||
+      error.name === "AbortError";
+
+    return res.status(timedOut ? 504 : 500).json({
+      error: timedOut
+        ? "Gemini request timed out."
+        : "Could not get a response from Gemini.",
+      details: error.message
     });
   }
 }
