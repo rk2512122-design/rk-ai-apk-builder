@@ -1,0 +1,51 @@
+
+name: Build Study Helper APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Study Helper
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository files
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install unzip
+        run: sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: Download Gradle 8.7
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle-8.7-bin.zip
+          echo "$GITHUB_WORKSPACE/gradle-8.7/bin" >> "$GITHUB_PATH"
+
+      - name: Extract Study Helper project
+        run: |
+          test -f Study_Helper_Test_fixed.zip
+          mkdir -p study-helper-project
+          unzip -q Study_Helper_Test_fixed.zip -d study-helper-project
+          test -f study-helper-project/settings.gradle
+          test -f study-helper-project/app/build.gradle
+
+      - name: Build Android APK
+        working-directory: study-helper-project
+        run: gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Study-Helper-APK
+          path: study-helper-project/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
