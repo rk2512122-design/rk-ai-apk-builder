@@ -59,17 +59,17 @@ ANDROID PROJECT RULES:
    assets and resource files whenever required.
 9. Include a working launcher Activity.
 10. Include a complete AndroidManifest.xml.
-11. Do not generate empty files or placeholder implementations.
+11. Do not generate empty files or placeholders.
 12. All referenced files and resources must exist.
-13. Keep package names, resource names and file paths consistent.
+13. Keep package names, resource names and paths consistent.
 14. Do not claim that an APK has already been built.
 
 LAUNCHER ICON RULES:
 
-15. Generate valid launcher icon resources whenever possible.
-16. If launcher icon resources are not generated,
+15. Generate valid launcher icon resources.
+16. If launcher icon resources are unavailable,
     do not reference missing @mipmap/ic_launcher
-    or @mipmap/ic_launcher_round resources in AndroidManifest.xml.
+    or @mipmap/ic_launcher_round resources.
 17. All manifest icon references must point to existing resources.
 
 CRITICAL GRADLE RULES:
@@ -85,42 +85,23 @@ CRITICAL GRADLE RULES:
     id 'com.android.application' version '8.6.1' apply false
 
 21. NEVER generate allprojects repositories blocks.
+22. NEVER generate project-level repositories blocks.
+23. Do not use old buildscript configuration.
+24. Generate app/build.gradle with Android application plugin,
+    namespace, applicationId, compileSdk, minSdk and targetSdk.
 
-22. NEVER generate project-level repositories blocks
-    in root build.gradle or app/build.gradle.
-
-23. Do not use old buildscript-based configuration.
-    Use the plugins DSL.
-
-24. Generate app/build.gradle with the Android application
-    plugin, namespace, applicationId, compileSdk,
-    minSdk and targetSdk.
-
-25. Generate gradle.properties in the project root.
-
-26. gradle.properties MUST contain:
+25. Generate gradle.properties containing:
     android.useAndroidX=true
     android.enableJetifier=true
     org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
     org.gradle.parallel=true
 
-27. Gradle configuration must be compatible with
-    Java 17 and Gradle 8.7 or newer.
-
-28. Do not mix old buildscript and new plugins DSL configurations.
-
-29. Ensure settings.gradle, root build.gradle,
-    app/build.gradle and gradle.properties work together.
-
-30. Include Gradle wrapper files only if they can
-    be generated completely and correctly.
-
-31. Generate all dependencies required by the app features.
-
-32. Do not use AndroidX dependencies without enabling AndroidX.
-
-33. Check that all generated resources and Java classes
-    are referenced correctly.
+26. Use Java 17 and Gradle 8.7 or newer.
+27. Do not mix old buildscript and plugins DSL.
+28. Ensure all Gradle files work together.
+29. Include Gradle wrapper files only if complete.
+30. Generate all dependencies required by app features.
+31. Check all generated resources and Java classes.
 
 FILE OUTPUT FORMAT:
 
@@ -204,7 +185,7 @@ OUTPUT REQUIREMENTS:
       if (!response.ok) {
         const message =
           data.error?.message ||
-          \`Google API returned HTTP \${response.status}.\`;
+          `Google API returned HTTP ${response.status}.`;
 
         if (
           retryableStatuses.includes(response.status) &&
@@ -243,7 +224,7 @@ OUTPUT REQUIREMENTS:
       if (candidate?.finishReason === "MAX_TOKENS") {
         return res.status(502).json({
           error: "AI project generation was incomplete.",
-          details: "The output token limit was reached. Please try again."
+          details: "The output token limit was reached."
         });
       }
 
@@ -270,14 +251,12 @@ OUTPUT REQUIREMENTS:
 
       if (project.files.length > 80) {
         return res.status(502).json({
-          error: "The project contains too many files.",
-          details: "The current safety limit is 80 files."
+          error: "The project contains too many files."
         });
       }
 
       const cleanFiles = [];
       const seenPaths = new Set();
-      let totalSize = 0;
 
       for (const file of project.files) {
         if (
@@ -295,7 +274,7 @@ OUTPUT REQUIREMENTS:
         if (
           !path ||
           path.startsWith("/") ||
-          path.includes("..") ||
+          path.split("/").includes("..") ||
           !/^[a-zA-Z0-9_./-]+$/.test(path)
         ) {
           return res.status(502).json({
@@ -313,22 +292,12 @@ OUTPUT REQUIREMENTS:
 
         seenPaths.add(path);
 
-        totalSize += new TextEncoder().encode(file.content).length;
-
-        if (totalSize > 2 * 1024 * 1024) {
-          return res.status(502).json({
-            error: "The generated project is too large.",
-            details: "The current size limit is 2 MB."
-          });
-        }
-
         cleanFiles.push({
           path,
           content: file.content
         });
       }
 
-      // Ensure gradle.properties always exists.
       const gradlePropertiesPath = "gradle.properties";
 
       let gradlePropertiesFile = cleanFiles.find(
@@ -342,28 +311,27 @@ OUTPUT REQUIREMENTS:
       const requiredProperties = {
         "android.useAndroidX": "true",
         "android.enableJetifier": "true",
-        "org.gradle.jvmargs":
-          "-Xmx2048m -Dfile.encoding=UTF-8",
+        "org.gradle.jvmargs": "-Xmx2048m -Dfile.encoding=UTF-8",
         "org.gradle.parallel": "true"
       };
 
+      const propertyLines = propertiesContent
+        .split(/\r?\n/)
+        .filter(line => line.trim() !== "");
+
       for (const [key, value] of Object.entries(requiredProperties)) {
-        const propertyRegex = new RegExp(
-          \`^\\\\s*#?\\\\s*\${key.replace(/[.*+?^\${}()|[\\\\]\\\\]/g, "\\\\$&")}\\\\s*=.*$\`,
-          "m"
+        const index = propertyLines.findIndex(line =>
+          line.trim().replace(/^#\s*/, "").startsWith(key + "=")
         );
 
-        if (propertyRegex.test(propertiesContent)) {
-          propertiesContent = propertiesContent.replace(
-            propertyRegex,
-            \`\${key}=\${value}\`
-          );
+        if (index >= 0) {
+          propertyLines[index] = `${key}=${value}`;
         } else {
-          propertiesContent =
-            propertiesContent.trimEnd() +
-            \`\\n\${key}=\${value}\\n\`;
+          propertyLines.push(`${key}=${value}`);
         }
       }
+
+      propertiesContent = propertyLines.join("\n") + "\n";
 
       if (gradlePropertiesFile) {
         gradlePropertiesFile.content = propertiesContent;
@@ -372,22 +340,8 @@ OUTPUT REQUIREMENTS:
           path: gradlePropertiesPath,
           content: propertiesContent
         };
-
         cleanFiles.push(gradlePropertiesFile);
         seenPaths.add(gradlePropertiesPath);
-      }
-
-      totalSize = cleanFiles.reduce(
-        (sum, file) =>
-          sum + new TextEncoder().encode(file.content).length,
-        0
-      );
-
-      if (totalSize > 2 * 1024 * 1024) {
-        return res.status(502).json({
-          error: "The generated project is too large.",
-          details: "The current size limit is 2 MB."
-        });
       }
 
       const requiredFiles = [
@@ -409,37 +363,50 @@ OUTPUT REQUIREMENTS:
         });
       }
 
-      // Fix missing launcher icon resources in AndroidManifest.xml.
+      // Fix missing launcher icon resources.
       const manifestFile = cleanFiles.find(
         file =>
           file.path === "app/src/main/AndroidManifest.xml"
       );
 
-      if (manifestFile) {
-        const hasLauncherIcon = name =>
-          cleanFiles.some(file =>
-            new RegExp(
-              \`^app/src/main/res/mipmap[^/]*/\${name}\\\\.(xml|png|webp|jpg)$\`,
-              "i"
-            ).test(file.path)
-          );
+      const hasLauncherIcon = name => {
+        const allowedExtensions = [".xml", ".png", ".webp", ".jpg"];
 
-        if (!hasLauncherIcon("ic_launcher")) {
-          manifestFile.content = manifestFile.content.replace(
-            /\\s+android:icon\\s*=\\s*["']@mipmap\\/ic_launcher["']/g,
-            ""
+        return cleanFiles.some(file => {
+          const prefix = "app/src/main/res/";
+          if (!file.path.startsWith(prefix)) return false;
+
+          const relativePath = file.path.slice(prefix.length);
+          const parts = relativePath.split("/");
+
+          if (parts.length !== 2) return false;
+          if (!parts[0].startsWith("mipmap")) return false;
+
+          return allowedExtensions.some(extension =>
+            parts[1].toLowerCase() ===
+            (name + extension).toLowerCase()
           );
+        });
+      };
+
+      if (manifestFile) {
+        if (!hasLauncherIcon("ic_launcher")) {
+          manifestFile.content =
+            manifestFile.content.replace(
+              /\s+android:icon\s*=\s*["']@mipmap\/ic_launcher["']/g,
+              ""
+            );
         }
 
         if (!hasLauncherIcon("ic_launcher_round")) {
-          manifestFile.content = manifestFile.content.replace(
-            /\\s+android:roundIcon\\s*=\\s*["']@mipmap\\/ic_launcher_round["']/g,
-            ""
-          );
+          manifestFile.content =
+            manifestFile.content.replace(
+              /\s+android:roundIcon\s*=\s*["']@mipmap\/ic_launcher_round["']/g,
+              ""
+            );
         }
       }
 
-      // Validate Gradle configuration.
       const rootGradle = cleanFiles.find(
         file => file.path === "build.gradle"
       ).content;
@@ -464,7 +431,7 @@ OUTPUT REQUIREMENTS:
         return res.status(502).json({
           error: "Invalid Gradle repository configuration.",
           details:
-            "Project-level repositories are forbidden. Put dependency repositories in settings.gradle only."
+            "Project-level repositories are forbidden. Use settings.gradle only."
         });
       }
 
@@ -475,9 +442,7 @@ OUTPUT REQUIREMENTS:
         !/repositories\s*\{/i.test(settingsGradle)
       ) {
         return res.status(502).json({
-          error: "Invalid settings.gradle configuration.",
-          details:
-            "Centralized dependency repositories and FAIL_ON_PROJECT_REPOS are required."
+          error: "Invalid settings.gradle configuration."
         });
       }
 
@@ -485,9 +450,7 @@ OUTPUT REQUIREMENTS:
         !/plugins\s*\{[\s\S]*?com\.android\.application[\s\S]*?8\.6\.1[\s\S]*?apply\s+false/i.test(rootGradle)
       ) {
         return res.status(502).json({
-          error: "Invalid root build.gradle configuration.",
-          details:
-            "Android Gradle Plugin 8.6.1 must be declared in the root plugins block using apply false."
+          error: "Invalid root build.gradle configuration."
         });
       }
 
@@ -497,9 +460,7 @@ OUTPUT REQUIREMENTS:
         !/applicationId\s+/i.test(appGradle)
       ) {
         return res.status(502).json({
-          error: "Invalid app/build.gradle configuration.",
-          details:
-            "The Android application plugin, namespace and applicationId are required."
+          error: "Invalid app/build.gradle configuration."
         });
       }
 
@@ -508,9 +469,20 @@ OUTPUT REQUIREMENTS:
         !/android\.enableJetifier\s*=\s*true/i.test(finalProperties)
       ) {
         return res.status(502).json({
-          error: "AndroidX configuration is missing.",
-          details:
-            "gradle.properties must enable AndroidX and Jetifier."
+          error: "AndroidX configuration is missing."
+        });
+      }
+
+      const totalSize = cleanFiles.reduce(
+        (sum, file) =>
+          sum + new TextEncoder().encode(file.content).length,
+        0
+      );
+
+      if (totalSize > 2 * 1024 * 1024) {
+        return res.status(502).json({
+          error: "The generated project is too large.",
+          details: "The current size limit is 2 MB."
         });
       }
 
