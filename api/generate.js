@@ -1,3 +1,4 @@
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -33,8 +34,8 @@ export default async function handler(req, res) {
   const prompt = `
 You are a professional Android application development AI.
 
-Your task is to generate a COMPLETE Android Studio project
-based on the user's app idea.
+Generate a COMPLETE, BUILDABLE Android Studio project
+for the user's requested legitimate Android application.
 
 APP NAME:
 ${safeAppName}
@@ -45,29 +46,91 @@ ${safeAppType}
 USER REQUIREMENTS:
 ${safeFeatures}
 
-IMPORTANT PROJECT RULES:
+ANDROID PROJECT RULES:
 
-1. Support ANY legitimate Android app category.
-2. Understand the requested features before creating files.
-3. Use Java for Android application code.
-4. Use Android Gradle Plugin 8.6.1.
-5. Use Gradle-compatible project configuration.
-6. Use compileSdk 35, minSdk 24 and targetSdk 35.
-7. Use package name com.example.generatedapp.
-8. Use standard Android SDK components where possible.
-9. Avoid unnecessary external libraries.
-10. Generate every file required by the requested application.
-11. Do NOT restrict the project to 10 files.
-12. Generate additional Java, XML, drawable, menu,
-    values, assets and resource files whenever required.
-13. Include all required Gradle configuration files.
-14. Include AndroidManifest.xml.
-15. Include a working launcher Activity.
-16. Implement the requested features as completely as possible.
-17. Do not create empty files or placeholder code.
-18. Do not refer to files that you have not generated.
-19. Keep all file paths consistent.
-20. Do not claim that an APK has already been built.
+1. Support any legitimate Android app category.
+2. Use Java for Android application code.
+3. Use Android Gradle Plugin version 8.6.1.
+4. Use compileSdk 35, minSdk 24 and targetSdk 35.
+5. Use package name com.example.generatedapp.
+6. Generate all files required by the requested features.
+7. Do not restrict the project to a fixed number of files.
+8. Generate Java, XML, drawable, menu, values,
+   assets and resource files whenever required.
+9. Include a working launcher Activity.
+10. Include a complete AndroidManifest.xml.
+11. Do not generate empty files or placeholder implementations.
+12. All referenced files and resources must exist.
+13. Keep package names, resource names and file paths consistent.
+14. Do not claim that an APK has already been built.
+
+CRITICAL GRADLE REPOSITORY RULES:
+
+15. Generate a settings.gradle file that contains:
+    pluginManagement repositories with google() and
+    mavenCentral(), and dependencyResolutionManagement
+    with repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    and repositories google() and mavenCentral().
+
+16. Generate a root build.gradle file using the Gradle
+    plugins DSL with Android Gradle Plugin 8.6.1,
+    apply false.
+
+17. NEVER generate this block in root build.gradle:
+    allprojects { repositories { ... } }
+
+18. NEVER generate project-level repositories blocks
+    in root build.gradle or app/build.gradle.
+
+19. Do not use buildscript or allprojects repository
+    configuration. Use the plugins DSL.
+
+20. All application dependency repositories must be
+    declared centrally in settings.gradle.
+
+21. Generate app/build.gradle with the Android application
+    plugin and the correct namespace, applicationId,
+    compileSdk, minSdk and targetSdk.
+
+22. Ensure Gradle configuration is compatible with
+    Java 17 and Gradle 8.7.
+
+23. Do not mix old buildscript-based and new plugins DSL
+    configurations.
+
+24. Ensure settings.gradle, root build.gradle and
+    app/build.gradle work together without repository conflicts.
+
+25. Include Gradle wrapper files only if they can be
+    generated completely and correctly. Do not create
+    fake or empty wrapper files.
+
+RECOMMENDED ROOT build.gradle FORMAT:
+
+plugins {
+    id 'com.android.application' version '8.6.1' apply false
+}
+
+RECOMMENDED settings.gradle FORMAT:
+
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "Application Name"
+include ':app'
 
 FILE OUTPUT FORMAT:
 
@@ -93,14 +156,15 @@ Use exactly this structure:
   ]
 }
 
-IMPORTANT:
-- The files array must contain ALL required project files.
+OUTPUT REQUIREMENTS:
+
+- The files array must contain every required project file.
 - There is no fixed number of files.
 - Every path must be relative to the project root.
 - Every content field must contain the complete file.
 - Escape JSON special characters correctly.
-- Do not wrap the JSON in Markdown code fences.
-- Do not include explanations outside the JSON.
+- Do not wrap JSON in Markdown code fences.
+- Do not include explanations outside JSON.
 - Do not omit required files.
 `;
 
@@ -147,7 +211,7 @@ IMPORTANT:
       if (!response.ok) {
         const message =
           data.error?.message ||
-          `Google API returned HTTP ${response.status}.`;
+          \`Google API returned HTTP \${response.status}.\`;
 
         if (
           retryableStatuses.includes(response.status) &&
@@ -170,7 +234,7 @@ IMPORTANT:
       const output = (data.candidates || [])
         .flatMap(item => item.content?.parts || [])
         .map(part => part.text || "")
-        .join("\n")
+        .join("\\n")
         .trim();
 
       if (!output) {
@@ -273,6 +337,7 @@ IMPORTANT:
 
       const requiredFiles = [
         "settings.gradle",
+        "build.gradle",
         "app/build.gradle",
         "app/src/main/AndroidManifest.xml"
       ];
@@ -288,12 +353,59 @@ IMPORTANT:
         });
       }
 
+      // Validate centralized Gradle repository configuration.
+      const rootGradle = cleanFiles.find(
+        file => file.path === "build.gradle"
+      ).content;
+
+      const settingsGradle = cleanFiles.find(
+        file => file.path === "settings.gradle"
+      ).content;
+
+      const appGradle = cleanFiles.find(
+        file => file.path === "app/build.gradle"
+      ).content;
+
+      if (
+        /allprojects\s*\{[\s\S]*?repositories\s*\{/i.test(rootGradle) ||
+        /repositories\s*\{/i.test(appGradle)
+      ) {
+        return res.status(502).json({
+          error: "Invalid Gradle repository configuration.",
+          details:
+            "Project-level repositories are forbidden. Put dependency repositories in settings.gradle only."
+        });
+      }
+
+      if (
+        !/dependencyResolutionManagement\s*\{/i.test(settingsGradle) ||
+        !/FAIL_ON_PROJECT_REPOS/i.test(settingsGradle) ||
+        !/repositories\s*\{/i.test(settingsGradle)
+      ) {
+        return res.status(502).json({
+          error: "Invalid settings.gradle configuration.",
+          details:
+            "Centralized dependency repositories and FAIL_ON_PROJECT_REPOS are required."
+        });
+      }
+
+      if (
+        !/com\.android\.application/i.test(rootGradle) ||
+        !/8\.6\.1/.test(rootGradle)
+      ) {
+        return res.status(502).json({
+          error: "Invalid root build.gradle configuration.",
+          details:
+            "Android Gradle Plugin 8.6.1 must be declared in the root plugins block."
+        });
+      }
+
       return res.status(200).json({
         status: "completed",
         projectName: project.projectName || safeAppName,
         fileCount: cleanFiles.length,
         files: cleanFiles,
-        message: "Android project files generated successfully."
+        message: "Android project files generated and Gradle configuration validated."
       });
 
     } catch (error) {
