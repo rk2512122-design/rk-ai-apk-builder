@@ -2,13 +2,10 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return res.status(405).json({
-      error: "Only POST requests are supported."
-    });
+    return res.status(405).json({ error: "Only POST requests are supported." });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-
   if (!apiKey) {
     return res.status(500).json({
       error: "GEMINI_API_KEY is missing in Vercel Environment Variables."
@@ -16,7 +13,6 @@ export default async function handler(req, res) {
   }
 
   const { appName, appType, features } = req.body || {};
-
   if (
     !String(appName || "").trim() ||
     !String(appType || "").trim() ||
@@ -47,7 +43,6 @@ USER REQUIREMENTS:
 ${safeFeatures}
 
 ANDROID PROJECT RULES:
-
 1. Support any legitimate Android app category.
 2. Use Java for Android application code.
 3. Use Android Gradle Plugin version 8.6.1.
@@ -55,8 +50,7 @@ ANDROID PROJECT RULES:
 5. Use package name com.example.generatedapp.
 6. Generate all files required by the requested features.
 7. Do not restrict the project to a fixed number of files.
-8. Generate Java, XML, drawable, menu, values,
-   assets and resource files whenever required.
+8. Generate Java, XML, drawable, menu, values, assets and resource files whenever required.
 9. Include a working launcher Activity.
 10. Include a complete AndroidManifest.xml.
 11. Do not generate empty files or placeholders.
@@ -65,37 +59,19 @@ ANDROID PROJECT RULES:
 14. Do not claim that an APK has already been built.
 
 LAUNCHER ICON RULES:
-
 15. Generate valid launcher icon resources.
-16. If launcher icon resources are unavailable,
-    do not reference missing @mipmap/ic_launcher
-    or @mipmap/ic_launcher_round resources.
+16. If launcher icon resources are unavailable, do not reference missing @mipmap/ic_launcher or @mipmap/ic_launcher_round resources.
 17. All manifest icon references must point to existing resources.
 
 CRITICAL GRADLE RULES:
-
-18. Generate settings.gradle with pluginManagement repositories
-    containing google(), mavenCentral() and gradlePluginPortal().
-
-19. Generate dependencyResolutionManagement with:
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories containing google() and mavenCentral().
-
-20. Generate root build.gradle using plugins DSL:
-    id 'com.android.application' version '8.6.1' apply false
-
+18. Generate settings.gradle with pluginManagement repositories containing google(), mavenCentral() and gradlePluginPortal().
+19. Generate dependencyResolutionManagement with repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS), and repositories containing google() and mavenCentral().
+20. Generate root build.gradle using plugins DSL: id 'com.android.application' version '8.6.1' apply false.
 21. NEVER generate allprojects repositories blocks.
 22. NEVER generate project-level repositories blocks.
 23. Do not use old buildscript configuration.
-24. Generate app/build.gradle with Android application plugin,
-    namespace, applicationId, compileSdk, minSdk and targetSdk.
-
-25. Generate gradle.properties containing:
-    android.useAndroidX=true
-    android.enableJetifier=true
-    org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-    org.gradle.parallel=true
-
+24. Generate app/build.gradle with Android application plugin, namespace, applicationId, compileSdk, minSdk and targetSdk.
+25. Generate gradle.properties containing android.useAndroidX=true, android.enableJetifier=true, org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 and org.gradle.parallel=true.
 26. Use Java 17 and Gradle 8.7 or newer.
 27. Do not mix old buildscript and plugins DSL.
 28. Ensure all Gradle files work together.
@@ -103,36 +79,27 @@ CRITICAL GRADLE RULES:
 30. Generate all dependencies required by app features.
 31. Check all generated resources and Java classes.
 
+CRITICAL XML ID RULES:
+32. Every android:id must have a valid non-empty value.
+33. Never generate android:id="" or android:id=''.
+34. Never generate android:id="@+id/" or android:id="@id/".
+35. Use valid resource IDs such as @+id/main_button.
+36. Resource IDs must use lowercase letters, numbers and underscores.
+37. Check all layout XML files for empty or malformed android:id values.
+
 FILE OUTPUT FORMAT:
-
-Return ONLY valid JSON.
-
-Use exactly this structure:
-
+Return ONLY valid JSON in this structure:
 {
   "projectName": "Application Name",
   "files": [
     {
       "path": "settings.gradle",
       "content": "complete file content"
-    },
-    {
-      "path": "build.gradle",
-      "content": "complete file content"
-    },
-    {
-      "path": "app/build.gradle",
-      "content": "complete file content"
-    },
-    {
-      "path": "gradle.properties",
-      "content": "complete file content"
     }
   ]
 }
 
 OUTPUT REQUIREMENTS:
-
 - Include every required project file.
 - There is no fixed number of files.
 - Every path must be relative to the project root.
@@ -173,7 +140,6 @@ OUTPUT REQUIREMENTS:
       );
 
       let data;
-
       try {
         data = await response.json();
       } catch {
@@ -204,7 +170,6 @@ OUTPUT REQUIREMENTS:
       }
 
       const candidate = data.candidates?.[0];
-
       const output = (data.candidates || [])
         .flatMap(item => item.content?.parts || [])
         .map(part => part.text || "")
@@ -229,7 +194,6 @@ OUTPUT REQUIREMENTS:
       }
 
       let project;
-
       try {
         project = JSON.parse(output);
       } catch {
@@ -285,21 +249,46 @@ OUTPUT REQUIREMENTS:
 
         if (seenPaths.has(path)) {
           return res.status(502).json({
-            error: "Duplicate project file detected.",
+            error: "Duplicate project file was detected.",
             details: path
           });
         }
 
         seenPaths.add(path);
 
-        cleanFiles.push({
-          path,
-          content: file.content
-        });
+        let content = file.content;
+
+        // Fix empty and incomplete Android XML IDs.
+        if (
+          path.startsWith("app/src/main/res/") &&
+          path.endsWith(".xml")
+        ) {
+          content = content.replace(
+            /\s+android:id\s*=\s*(["'])\s*\1/g,
+            ""
+          );
+
+          content = content.replace(
+            /\s+android:id\s*=\s*(["'])@(?:\+)?id\/\s*\1/g,
+            ""
+          );
+
+          const invalidIdPattern =
+            /\bandroid:id\s*=\s*(["'])\s*(?:@(?:\+)?id\/)?\s*\1/;
+
+          if (invalidIdPattern.test(content)) {
+            return res.status(502).json({
+              error: "Invalid empty Android XML ID detected.",
+              details: path
+            });
+          }
+        }
+
+        cleanFiles.push({ path, content });
       }
 
+      // Maintain AndroidX and Gradle properties.
       const gradlePropertiesPath = "gradle.properties";
-
       let gradlePropertiesFile = cleanFiles.find(
         file => file.path === gradlePropertiesPath
       );
@@ -363,7 +352,7 @@ OUTPUT REQUIREMENTS:
         });
       }
 
-      // Fix missing launcher icon resources.
+      // Preserve launcher icon checks.
       const manifestFile = cleanFiles.find(
         file =>
           file.path === "app/src/main/AndroidManifest.xml"
@@ -407,6 +396,7 @@ OUTPUT REQUIREMENTS:
         }
       }
 
+      // Validate Gradle configuration.
       const rootGradle = cleanFiles.find(
         file => file.path === "build.gradle"
       ).content;
