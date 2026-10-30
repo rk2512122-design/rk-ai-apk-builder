@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   const prompt = `
 You are a professional Android application development AI.
 
-Generate a COMPLETE, BUILDABLE Android Studio project
+Generate a complete, buildable Android Studio project
 for the user's requested legitimate Android application.
 
 APP NAME:
@@ -66,52 +66,48 @@ ANDROID PROJECT RULES:
 
 CRITICAL GRADLE REPOSITORY RULES:
 
-15. Generate a settings.gradle file that contains:
-    pluginManagement repositories with google() and
-    mavenCentral(), and dependencyResolutionManagement
+15. settings.gradle must contain pluginManagement repositories
+    with google(), mavenCentral() and gradlePluginPortal().
+
+16. settings.gradle must contain dependencyResolutionManagement
     with repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     and repositories google() and mavenCentral().
 
-16. Generate a root build.gradle file using the Gradle
-    plugins DSL with Android Gradle Plugin 8.6.1,
-    apply false.
+17. Root build.gradle must use the plugins DSL with:
+    id 'com.android.application' version '8.6.1' apply false
 
-17. NEVER generate this block in root build.gradle:
-    allprojects { repositories { ... } }
+18. NEVER generate allprojects { repositories { ... } }
+    in root build.gradle.
 
-18. NEVER generate project-level repositories blocks
+19. NEVER generate project-level repositories blocks
     in root build.gradle or app/build.gradle.
 
-19. Do not use buildscript or allprojects repository
+20. Do not use buildscript or allprojects repository
     configuration. Use the plugins DSL.
 
-20. All application dependency repositories must be
+21. All application dependency repositories must be
     declared centrally in settings.gradle.
 
-21. Generate app/build.gradle with the Android application
-    plugin and the correct namespace, applicationId,
-    compileSdk, minSdk and targetSdk.
+22. app/build.gradle must use the Android application plugin
+    and correct namespace, applicationId, compileSdk,
+    minSdk and targetSdk.
 
-22. Ensure Gradle configuration is compatible with
-    Java 17 and Gradle 8.7.
+23. Ensure compatibility with Java 17 and Gradle 8.7.
 
-23. Do not mix old buildscript-based and new plugins DSL
+24. Do not mix old buildscript-based and new plugins DSL
     configurations.
 
-24. Ensure settings.gradle, root build.gradle and
-    app/build.gradle work together without repository conflicts.
+25. Ensure all Gradle files work together without conflicts.
 
-25. Include Gradle wrapper files only if they can be
-    generated completely and correctly. Do not create
-    fake or empty wrapper files.
+26. Do not create fake or empty Gradle wrapper files.
 
-RECOMMENDED ROOT build.gradle FORMAT:
+RECOMMENDED ROOT build.gradle:
 
 plugins {
     id 'com.android.application' version '8.6.1' apply false
 }
 
-RECOMMENDED settings.gradle FORMAT:
+RECOMMENDED settings.gradle:
 
 pluginManagement {
     repositories {
@@ -211,7 +207,7 @@ OUTPUT REQUIREMENTS:
       if (!response.ok) {
         const message =
           data.error?.message ||
-          \`Google API returned HTTP \${response.status}.\`;
+          `Google API returned HTTP ${response.status}.`;
 
         if (
           retryableStatuses.includes(response.status) &&
@@ -234,7 +230,7 @@ OUTPUT REQUIREMENTS:
       const output = (data.candidates || [])
         .flatMap(item => item.content?.parts || [])
         .map(part => part.text || "")
-        .join("\\n")
+        .join("\n")
         .trim();
 
       if (!output) {
@@ -353,7 +349,8 @@ OUTPUT REQUIREMENTS:
         });
       }
 
-      // Validate centralized Gradle repository configuration.
+      // Validate Gradle configuration.
+
       const rootGradle = cleanFiles.find(
         file => file.path === "build.gradle"
       ).content;
@@ -405,7 +402,8 @@ OUTPUT REQUIREMENTS:
         projectName: project.projectName || safeAppName,
         fileCount: cleanFiles.length,
         files: cleanFiles,
-        message: "Android project files generated and Gradle configuration validated."
+        message:
+          "Android project files generated and Gradle configuration validated."
       });
 
     } catch (error) {
