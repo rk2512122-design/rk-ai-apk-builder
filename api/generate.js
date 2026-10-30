@@ -64,54 +64,62 @@ ANDROID PROJECT RULES:
 13. Keep package names, resource names and file paths consistent.
 14. Do not claim that an APK has already been built.
 
+LAUNCHER ICON RULES:
+
+15. Generate valid launcher icon resources whenever possible.
+16. If launcher icon resources are not generated,
+    do not reference missing @mipmap/ic_launcher
+    or @mipmap/ic_launcher_round resources in AndroidManifest.xml.
+17. All manifest icon references must point to existing resources.
+
 CRITICAL GRADLE RULES:
 
-15. Generate settings.gradle with pluginManagement repositories
+18. Generate settings.gradle with pluginManagement repositories
     containing google(), mavenCentral() and gradlePluginPortal().
 
-16. Generate dependencyResolutionManagement with:
+19. Generate dependencyResolutionManagement with:
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories containing google() and mavenCentral().
 
-17. Generate root build.gradle using plugins DSL:
+20. Generate root build.gradle using plugins DSL:
     id 'com.android.application' version '8.6.1' apply false
 
-18. NEVER generate allprojects repositories blocks.
+21. NEVER generate allprojects repositories blocks.
 
-19. NEVER generate project-level repositories blocks
+22. NEVER generate project-level repositories blocks
     in root build.gradle or app/build.gradle.
 
-20. Do not use old buildscript-based configuration.
+23. Do not use old buildscript-based configuration.
     Use the plugins DSL.
 
-21. Generate app/build.gradle with the Android application
+24. Generate app/build.gradle with the Android application
     plugin, namespace, applicationId, compileSdk,
     minSdk and targetSdk.
 
-22. Generate gradle.properties in the project root.
+25. Generate gradle.properties in the project root.
 
-23. gradle.properties MUST contain:
+26. gradle.properties MUST contain:
     android.useAndroidX=true
     android.enableJetifier=true
     org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
     org.gradle.parallel=true
 
-24. Gradle configuration must be compatible with
+27. Gradle configuration must be compatible with
     Java 17 and Gradle 8.7 or newer.
 
-25. Do not mix old buildscript and new plugins DSL configurations.
+28. Do not mix old buildscript and new plugins DSL configurations.
 
-26. Ensure settings.gradle, root build.gradle,
+29. Ensure settings.gradle, root build.gradle,
     app/build.gradle and gradle.properties work together.
 
-27. Include Gradle wrapper files only if they can
+30. Include Gradle wrapper files only if they can
     be generated completely and correctly.
 
-28. Generate all dependencies required by the app features.
+31. Generate all dependencies required by the app features.
 
-29. Do not use AndroidX dependencies without enabling AndroidX.
+32. Do not use AndroidX dependencies without enabling AndroidX.
 
-30. Check that all generated resources and Java classes
+33. Check that all generated resources and Java classes
     are referenced correctly.
 
 FILE OUTPUT FORMAT:
@@ -196,7 +204,7 @@ OUTPUT REQUIREMENTS:
       if (!response.ok) {
         const message =
           data.error?.message ||
-          `Google API returned HTTP ${response.status}.`;
+          \`Google API returned HTTP \${response.status}.\`;
 
         if (
           retryableStatuses.includes(response.status) &&
@@ -331,7 +339,6 @@ OUTPUT REQUIREMENTS:
         ? gradlePropertiesFile.content
         : "";
 
-      // Force required AndroidX and Gradle settings.
       const requiredProperties = {
         "android.useAndroidX": "true",
         "android.enableJetifier": "true",
@@ -342,19 +349,19 @@ OUTPUT REQUIREMENTS:
 
       for (const [key, value] of Object.entries(requiredProperties)) {
         const propertyRegex = new RegExp(
-          `^\\s*#?\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*=.*$`,
+          \`^\\\\s*#?\\\\s*\${key.replace(/[.*+?^\${}()|[\\\\]\\\\]/g, "\\\\$&")}\\\\s*=.*$\`,
           "m"
         );
 
         if (propertyRegex.test(propertiesContent)) {
           propertiesContent = propertiesContent.replace(
             propertyRegex,
-            `${key}=${value}`
+            \`\${key}=\${value}\`
           );
         } else {
           propertiesContent =
             propertiesContent.trimEnd() +
-            `\n${key}=${value}\n`;
+            \`\\n\${key}=\${value}\\n\`;
         }
       }
 
@@ -400,6 +407,36 @@ OUTPUT REQUIREMENTS:
           error: "The Android project is missing required files.",
           missingFiles
         });
+      }
+
+      // Fix missing launcher icon resources in AndroidManifest.xml.
+      const manifestFile = cleanFiles.find(
+        file =>
+          file.path === "app/src/main/AndroidManifest.xml"
+      );
+
+      if (manifestFile) {
+        const hasLauncherIcon = name =>
+          cleanFiles.some(file =>
+            new RegExp(
+              \`^app/src/main/res/mipmap[^/]*/\${name}\\\\.(xml|png|webp|jpg)$\`,
+              "i"
+            ).test(file.path)
+          );
+
+        if (!hasLauncherIcon("ic_launcher")) {
+          manifestFile.content = manifestFile.content.replace(
+            /\\s+android:icon\\s*=\\s*["']@mipmap\\/ic_launcher["']/g,
+            ""
+          );
+        }
+
+        if (!hasLauncherIcon("ic_launcher_round")) {
+          manifestFile.content = manifestFile.content.replace(
+            /\\s+android:roundIcon\\s*=\\s*["']@mipmap\\/ic_launcher_round["']/g,
+            ""
+          );
+        }
       }
 
       // Validate Gradle configuration.
