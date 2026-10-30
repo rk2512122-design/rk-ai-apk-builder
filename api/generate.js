@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   const prompt = `
 You are a professional Android application development AI.
 
-Generate a complete, buildable Android Studio project
+Generate a COMPLETE, BUILDABLE Android Studio project
 for the user's requested legitimate Android application.
 
 APP NAME:
@@ -64,69 +64,55 @@ ANDROID PROJECT RULES:
 13. Keep package names, resource names and file paths consistent.
 14. Do not claim that an APK has already been built.
 
-CRITICAL GRADLE REPOSITORY RULES:
+CRITICAL GRADLE RULES:
 
-15. settings.gradle must contain pluginManagement repositories
-    with google(), mavenCentral() and gradlePluginPortal().
+15. Generate settings.gradle with pluginManagement repositories
+    containing google(), mavenCentral() and gradlePluginPortal().
 
-16. settings.gradle must contain dependencyResolutionManagement
-    with repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    and repositories google() and mavenCentral().
+16. Generate dependencyResolutionManagement with:
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories containing google() and mavenCentral().
 
-17. Root build.gradle must use the plugins DSL with:
+17. Generate root build.gradle using plugins DSL:
     id 'com.android.application' version '8.6.1' apply false
 
-18. NEVER generate allprojects { repositories { ... } }
-    in root build.gradle.
+18. NEVER generate allprojects repositories blocks.
 
 19. NEVER generate project-level repositories blocks
     in root build.gradle or app/build.gradle.
 
-20. Do not use buildscript or allprojects repository
-    configuration. Use the plugins DSL.
+20. Do not use old buildscript-based configuration.
+    Use the plugins DSL.
 
-21. All application dependency repositories must be
-    declared centrally in settings.gradle.
-
-22. app/build.gradle must use the Android application plugin
-    and correct namespace, applicationId, compileSdk,
+21. Generate app/build.gradle with the Android application
+    plugin, namespace, applicationId, compileSdk,
     minSdk and targetSdk.
 
-23. Ensure compatibility with Java 17 and Gradle 8.7.
+22. Generate gradle.properties in the project root.
 
-24. Do not mix old buildscript-based and new plugins DSL
-    configurations.
+23. gradle.properties MUST contain:
+    android.useAndroidX=true
+    android.enableJetifier=true
+    org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+    org.gradle.parallel=true
 
-25. Ensure all Gradle files work together without conflicts.
+24. Gradle configuration must be compatible with
+    Java 17 and Gradle 8.7 or newer.
 
-26. Do not create fake or empty Gradle wrapper files.
+25. Do not mix old buildscript and new plugins DSL configurations.
 
-RECOMMENDED ROOT build.gradle:
+26. Ensure settings.gradle, root build.gradle,
+    app/build.gradle and gradle.properties work together.
 
-plugins {
-    id 'com.android.application' version '8.6.1' apply false
-}
+27. Include Gradle wrapper files only if they can
+    be generated completely and correctly.
 
-RECOMMENDED settings.gradle:
+28. Generate all dependencies required by the app features.
 
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
+29. Do not use AndroidX dependencies without enabling AndroidX.
 
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-
-rootProject.name = "Application Name"
-include ':app'
+30. Check that all generated resources and Java classes
+    are referenced correctly.
 
 FILE OUTPUT FORMAT:
 
@@ -148,20 +134,23 @@ Use exactly this structure:
     {
       "path": "app/build.gradle",
       "content": "complete file content"
+    },
+    {
+      "path": "gradle.properties",
+      "content": "complete file content"
     }
   ]
 }
 
 OUTPUT REQUIREMENTS:
 
-- The files array must contain every required project file.
+- Include every required project file.
 - There is no fixed number of files.
 - Every path must be relative to the project root.
 - Every content field must contain the complete file.
 - Escape JSON special characters correctly.
 - Do not wrap JSON in Markdown code fences.
 - Do not include explanations outside JSON.
-- Do not omit required files.
 `;
 
   const maxAttempts = 3;
@@ -198,7 +187,7 @@ OUTPUT REQUIREMENTS:
 
       try {
         data = await response.json();
-      } catch (error) {
+      } catch {
         return res.status(502).json({
           error: "Gemini returned an unreadable response."
         });
@@ -254,7 +243,7 @@ OUTPUT REQUIREMENTS:
 
       try {
         project = JSON.parse(output);
-      } catch (error) {
+      } catch {
         return res.status(502).json({
           error: "AI returned invalid project JSON.",
           details: "Please generate the project again."
@@ -331,11 +320,75 @@ OUTPUT REQUIREMENTS:
         });
       }
 
+      // Ensure gradle.properties always exists.
+      const gradlePropertiesPath = "gradle.properties";
+
+      let gradlePropertiesFile = cleanFiles.find(
+        file => file.path === gradlePropertiesPath
+      );
+
+      let propertiesContent = gradlePropertiesFile
+        ? gradlePropertiesFile.content
+        : "";
+
+      // Force required AndroidX and Gradle settings.
+      const requiredProperties = {
+        "android.useAndroidX": "true",
+        "android.enableJetifier": "true",
+        "org.gradle.jvmargs":
+          "-Xmx2048m -Dfile.encoding=UTF-8",
+        "org.gradle.parallel": "true"
+      };
+
+      for (const [key, value] of Object.entries(requiredProperties)) {
+        const propertyRegex = new RegExp(
+          `^\\s*#?\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*=.*$`,
+          "m"
+        );
+
+        if (propertyRegex.test(propertiesContent)) {
+          propertiesContent = propertiesContent.replace(
+            propertyRegex,
+            `${key}=${value}`
+          );
+        } else {
+          propertiesContent =
+            propertiesContent.trimEnd() +
+            `\n${key}=${value}\n`;
+        }
+      }
+
+      if (gradlePropertiesFile) {
+        gradlePropertiesFile.content = propertiesContent;
+      } else {
+        gradlePropertiesFile = {
+          path: gradlePropertiesPath,
+          content: propertiesContent
+        };
+
+        cleanFiles.push(gradlePropertiesFile);
+        seenPaths.add(gradlePropertiesPath);
+      }
+
+      totalSize = cleanFiles.reduce(
+        (sum, file) =>
+          sum + new TextEncoder().encode(file.content).length,
+        0
+      );
+
+      if (totalSize > 2 * 1024 * 1024) {
+        return res.status(502).json({
+          error: "The generated project is too large.",
+          details: "The current size limit is 2 MB."
+        });
+      }
+
       const requiredFiles = [
         "settings.gradle",
         "build.gradle",
         "app/build.gradle",
-        "app/src/main/AndroidManifest.xml"
+        "app/src/main/AndroidManifest.xml",
+        "gradle.properties"
       ];
 
       const missingFiles = requiredFiles.filter(
@@ -350,7 +403,6 @@ OUTPUT REQUIREMENTS:
       }
 
       // Validate Gradle configuration.
-
       const rootGradle = cleanFiles.find(
         file => file.path === "build.gradle"
       ).content;
@@ -363,9 +415,14 @@ OUTPUT REQUIREMENTS:
         file => file.path === "app/build.gradle"
       ).content;
 
+      const finalProperties = cleanFiles.find(
+        file => file.path === "gradle.properties"
+      ).content;
+
       if (
         /allprojects\s*\{[\s\S]*?repositories\s*\{/i.test(rootGradle) ||
-        /repositories\s*\{/i.test(appGradle)
+        /^\s*repositories\s*\{/im.test(rootGradle) ||
+        /^\s*repositories\s*\{/im.test(appGradle)
       ) {
         return res.status(502).json({
           error: "Invalid Gradle repository configuration.",
@@ -375,6 +432,7 @@ OUTPUT REQUIREMENTS:
       }
 
       if (
+        !/pluginManagement\s*\{/i.test(settingsGradle) ||
         !/dependencyResolutionManagement\s*\{/i.test(settingsGradle) ||
         !/FAIL_ON_PROJECT_REPOS/i.test(settingsGradle) ||
         !/repositories\s*\{/i.test(settingsGradle)
@@ -387,13 +445,35 @@ OUTPUT REQUIREMENTS:
       }
 
       if (
-        !/com\.android\.application/i.test(rootGradle) ||
-        !/8\.6\.1/.test(rootGradle)
+        !/plugins\s*\{[\s\S]*?com\.android\.application[\s\S]*?8\.6\.1[\s\S]*?apply\s+false/i.test(rootGradle)
       ) {
         return res.status(502).json({
           error: "Invalid root build.gradle configuration.",
           details:
-            "Android Gradle Plugin 8.6.1 must be declared in the root plugins block."
+            "Android Gradle Plugin 8.6.1 must be declared in the root plugins block using apply false."
+        });
+      }
+
+      if (
+        !/com\.android\.application/i.test(appGradle) ||
+        !/namespace\s+/i.test(appGradle) ||
+        !/applicationId\s+/i.test(appGradle)
+      ) {
+        return res.status(502).json({
+          error: "Invalid app/build.gradle configuration.",
+          details:
+            "The Android application plugin, namespace and applicationId are required."
+        });
+      }
+
+      if (
+        !/android\.useAndroidX\s*=\s*true/i.test(finalProperties) ||
+        !/android\.enableJetifier\s*=\s*true/i.test(finalProperties)
+      ) {
+        return res.status(502).json({
+          error: "AndroidX configuration is missing.",
+          details:
+            "gradle.properties must enable AndroidX and Jetifier."
         });
       }
 
