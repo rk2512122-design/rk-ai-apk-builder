@@ -1,4 +1,3 @@
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -28,69 +27,81 @@ export default async function handler(req, res) {
   }
 
   const safeAppName = String(appName).trim().slice(0, 100);
-  const safeAppType = String(appType).trim().slice(0, 100);
-  const safeFeatures = String(features).trim().slice(0, 2500);
+  const safeAppType = String(appType).trim().slice(0, 150);
+  const safeFeatures = String(features).trim().slice(0, 5000);
 
   const prompt = `
-You are a professional Android Java project generator.
+You are a professional Android application development AI.
 
-Generate a COMPLETE, compact, buildable Android Studio project.
+Your task is to generate a COMPLETE Android Studio project
+based on the user's app idea.
 
-APP DETAILS
-Name: ${safeAppName}
-Type: ${safeAppType}
-Requested features: ${safeFeatures}
+APP NAME:
+${safeAppName}
 
-TECHNICAL REQUIREMENTS
-- Use Java, not Kotlin.
-- Use Android Gradle Plugin 8.6.1.
-- Use Gradle 8.7.
-- Use compileSdk 35, minSdk 24, targetSdk 35.
-- Package and namespace: com.example.generatedapp
-- Use Android SDK and standard Android widgets only.
-- Avoid external libraries unless absolutely necessary.
-- Do not use AppCompat, Material Components or ConstraintLayout.
-- MainActivity must extend android.app.Activity.
-- The app must have a working launcher activity.
-- Use simple, compatible Android XML layouts.
-- All Java and XML files must be complete and syntactically valid.
-- Use consistent package names, resource names and IDs.
-- Do not use placeholders, ellipses or comments such as "add code here".
-- Do not omit any required file.
-- Keep the project small and the implementation concise.
+APP CATEGORY:
+${safeAppType}
 
-OUTPUT FORMAT
-Return these files in exactly this order.
-For each file, print its full relative path as a heading,
-then provide the complete contents in a fenced code block.
+USER REQUIREMENTS:
+${safeFeatures}
 
-1. settings.gradle
-2. build.gradle
-3. gradle.properties
-4. app/build.gradle
-5. app/src/main/AndroidManifest.xml
-6. app/src/main/java/com/example/generatedapp/MainActivity.java
-7. app/src/main/res/layout/activity_main.xml
-8. app/src/main/res/values/strings.xml
-9. app/src/main/res/values/colors.xml
-10. app/src/main/res/values/styles.xml
+IMPORTANT PROJECT RULES:
 
-BUILD REQUIREMENTS
-- settings.gradle must configure Google and Maven Central repositories.
-- Root build.gradle must declare the Android application plugin version.
-- app/build.gradle must use the application plugin.
-- Manifest must declare MainActivity with MAIN and LAUNCHER intent filters.
-- Do not reference missing icons, themes, files or resources.
-- MainActivity must load activity_main.xml and implement the requested features.
-- The layout must provide a usable interface for the app.
-- Resource references must match the resource files.
-- Do not claim that an APK has already been built.
+1. Support ANY legitimate Android app category.
+2. Understand the requested features before creating files.
+3. Use Java for Android application code.
+4. Use Android Gradle Plugin 8.6.1.
+5. Use Gradle-compatible project configuration.
+6. Use compileSdk 35, minSdk 24 and targetSdk 35.
+7. Use package name com.example.generatedapp.
+8. Use standard Android SDK components where possible.
+9. Avoid unnecessary external libraries.
+10. Generate every file required by the requested application.
+11. Do NOT restrict the project to 10 files.
+12. Generate additional Java, XML, drawable, menu,
+    values, assets and resource files whenever required.
+13. Include all required Gradle configuration files.
+14. Include AndroidManifest.xml.
+15. Include a working launcher Activity.
+16. Implement the requested features as completely as possible.
+17. Do not create empty files or placeholder code.
+18. Do not refer to files that you have not generated.
+19. Keep all file paths consistent.
+20. Do not claim that an APK has already been built.
 
-FINAL CHECK
-Before answering, verify that all 10 files are present,
-each code block is complete, and Java/XML braces and tags are closed.
+FILE OUTPUT FORMAT:
 
-Return the files and code only. Avoid lengthy explanations.
+Return ONLY valid JSON.
+
+Use exactly this structure:
+
+{
+  "projectName": "Application Name",
+  "files": [
+    {
+      "path": "settings.gradle",
+      "content": "complete file content"
+    },
+    {
+      "path": "build.gradle",
+      "content": "complete file content"
+    },
+    {
+      "path": "app/build.gradle",
+      "content": "complete file content"
+    }
+  ]
+}
+
+IMPORTANT:
+- The files array must contain ALL required project files.
+- There is no fixed number of files.
+- Every path must be relative to the project root.
+- Every content field must contain the complete file.
+- Escape JSON special characters correctly.
+- Do not wrap the JSON in Markdown code fences.
+- Do not include explanations outside the JSON.
+- Do not omit required files.
 `;
 
   const maxAttempts = 3;
@@ -115,7 +126,8 @@ Return the files and code only. Avoid lengthy explanations.
             ],
             generationConfig: {
               temperature: 0.2,
-              maxOutputTokens: 8192
+              maxOutputTokens: 16384,
+              responseMimeType: "application/json"
             }
           }),
           signal: AbortSignal.timeout(60000)
@@ -127,14 +139,8 @@ Return the files and code only. Avoid lengthy explanations.
       try {
         data = await response.json();
       } catch (error) {
-        console.error("Gemini JSON parsing error:", {
-          attempt,
-          message: error.message
-        });
-
         return res.status(502).json({
-          error: "Gemini returned an unreadable response.",
-          details: error.message
+          error: "Gemini returned an unreadable response."
         });
       }
 
@@ -142,12 +148,6 @@ Return the files and code only. Avoid lengthy explanations.
         const message =
           data.error?.message ||
           `Google API returned HTTP ${response.status}.`;
-
-        console.error("Gemini API error:", {
-          attempt,
-          status: response.status,
-          message
-        });
 
         if (
           retryableStatuses.includes(response.status) &&
@@ -160,7 +160,7 @@ Return the files and code only. Avoid lengthy explanations.
         }
 
         return res.status(502).json({
-          error: "Gemini could not generate a response.",
+          error: "Gemini could not generate the project.",
           details: message
         });
       }
@@ -175,29 +175,125 @@ Return the files and code only. Avoid lengthy explanations.
 
       if (!output) {
         return res.status(502).json({
-          error: "Gemini returned no text.",
+          error: "Gemini returned no project data.",
           details:
             data.promptFeedback?.blockReason ||
             candidate?.finishReason ||
-            "No text was found in the response."
+            "Empty response."
         });
       }
 
-      const wasTruncated =
-        candidate?.finishReason === "MAX_TOKENS";
+      if (candidate?.finishReason === "MAX_TOKENS") {
+        return res.status(502).json({
+          error: "AI project generation was incomplete.",
+          details: "The output token limit was reached. Please try again."
+        });
+      }
 
-      const finalOutput = wasTruncated
-        ? output +
-          "\n\nWARNING: The model reached its output token limit. " +
-          "The project may be incomplete. Do not build until all files are complete."
-        : output;
+      let project;
+
+      try {
+        project = JSON.parse(output);
+      } catch (error) {
+        return res.status(502).json({
+          error: "AI returned invalid project JSON.",
+          details: "Please generate the project again."
+        });
+      }
+
+      if (
+        !project ||
+        !Array.isArray(project.files) ||
+        project.files.length === 0
+      ) {
+        return res.status(502).json({
+          error: "No project files were returned."
+        });
+      }
+
+      if (project.files.length > 80) {
+        return res.status(502).json({
+          error: "The project contains too many files.",
+          details: "The current safety limit is 80 files."
+        });
+      }
+
+      const cleanFiles = [];
+      const seenPaths = new Set();
+      let totalSize = 0;
+
+      for (const file of project.files) {
+        if (
+          !file ||
+          typeof file.path !== "string" ||
+          typeof file.content !== "string"
+        ) {
+          return res.status(502).json({
+            error: "An invalid project file was returned."
+          });
+        }
+
+        const path = file.path.replace(/\\/g, "/").trim();
+
+        if (
+          !path ||
+          path.startsWith("/") ||
+          path.includes("..") ||
+          !/^[a-zA-Z0-9_./-]+$/.test(path)
+        ) {
+          return res.status(502).json({
+            error: "An unsafe project file path was detected.",
+            details: path
+          });
+        }
+
+        if (seenPaths.has(path)) {
+          return res.status(502).json({
+            error: "Duplicate project file detected.",
+            details: path
+          });
+        }
+
+        seenPaths.add(path);
+
+        totalSize += new TextEncoder().encode(file.content).length;
+
+        if (totalSize > 2 * 1024 * 1024) {
+          return res.status(502).json({
+            error: "The generated project is too large.",
+            details: "The current size limit is 2 MB."
+          });
+        }
+
+        cleanFiles.push({
+          path,
+          content: file.content
+        });
+      }
+
+      const requiredFiles = [
+        "settings.gradle",
+        "app/build.gradle",
+        "app/src/main/AndroidManifest.xml"
+      ];
+
+      const missingFiles = requiredFiles.filter(
+        path => !seenPaths.has(path)
+      );
+
+      if (missingFiles.length > 0) {
+        return res.status(502).json({
+          error: "The Android project is missing required files.",
+          missingFiles
+        });
+      }
 
       return res.status(200).json({
-        status: wasTruncated ? "incomplete" : "completed",
-        output: finalOutput,
-        warning: wasTruncated
-          ? "The output token limit was reached."
-          : null
+        status: "completed",
+        projectName: project.projectName || safeAppName,
+        fileCount: cleanFiles.length,
+        files: cleanFiles,
+        message: "Android project files generated successfully."
       });
 
     } catch (error) {
@@ -228,7 +324,6 @@ Return the files and code only. Avoid lengthy explanations.
   }
 
   return res.status(502).json({
-    error: "Gemini could not generate a response.",
-    details: "All retry attempts failed."
+    error: "All Gemini retry attempts failed."
   });
 }
