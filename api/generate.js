@@ -32,10 +32,9 @@ export default async function handler(req, res) {
   const safeFeatures = String(features).trim().slice(0, 5000);
 
   const prompt = `
-You are a professional Android application development AI.
+You are an expert Android Java developer.
 
-Generate a COMPLETE, BUILDABLE Android Studio project
-for the user's requested legitimate Android application.
+Create a COMPLETE, BUILDABLE Android Studio project.
 
 APP NAME:
 ${safeAppName}
@@ -46,57 +45,103 @@ ${safeAppType}
 USER REQUIREMENTS:
 ${safeFeatures}
 
-ANDROID PROJECT RULES:
-1. Support any legitimate Android app category.
-2. Use Java for Android application code.
-3. Use Android Gradle Plugin version 8.6.1.
-4. Use compileSdk 35, minSdk 24 and targetSdk 35.
-5. Use package name com.example.generatedapp.
-6. Generate all files required by the requested features.
-7. Do not restrict the project to a fixed number of files.
-8. Generate Java, XML, drawable, menu, values, assets and resource files whenever required.
-9. Include a working launcher Activity.
+ANDROID PROJECT REQUIREMENTS:
+
+1. Use Java only. Do not use Kotlin.
+2. Use package name com.example.generatedapp.
+3. Use Android Gradle Plugin 8.6.1.
+4. Use compileSdk 35.
+5. Use minSdk 24.
+6. Use targetSdk 35.
+7. Use Java 17.
+8. Generate every file required by the requested app.
+9. Include a working MainActivity.java.
 10. Include a complete AndroidManifest.xml.
-11. Do not generate empty files or placeholders.
-12. All referenced files and resources must exist.
-13. Keep package names, resource names and paths consistent.
-14. Do not claim that an APK has already been built.
+11. Include settings.gradle.
+12. Include root build.gradle.
+13. Include app/build.gradle.
+14. Include gradle.properties.
+15. Include all required layouts, values, drawables and other resources.
+16. Do not create empty files.
+17. Do not use placeholder code.
+18. Do not claim that the APK has already been built.
 
-LAUNCHER ICON RULES:
-15. Generate valid launcher icon resources.
-16. If launcher icon resources are unavailable, do not reference missing resources.
-17. All manifest icon references must point to existing resources.
-18. If ic_launcher_foreground.xml is generated inside drawable,
-    reference it as @drawable/ic_launcher_foreground.
-19. Never reference a drawable resource using @mipmap.
-20. Ensure adaptive launcher icon XML files reference existing resources.
+JAVA CODE RULES:
 
-CRITICAL GRADLE RULES:
-21. Generate settings.gradle with pluginManagement repositories containing google(), mavenCentral() and gradlePluginPortal().
-22. Generate dependencyResolutionManagement with repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS), and repositories containing google() and mavenCentral().
-23. Generate root build.gradle using plugins DSL: id 'com.android.application' version '8.6.1' apply false.
-24. NEVER generate allprojects repositories blocks.
-25. NEVER generate project-level repositories blocks.
-26. Do not use old buildscript configuration.
-27. Generate app/build.gradle with Android application plugin, namespace, applicationId, compileSdk, minSdk and targetSdk.
-28. Generate gradle.properties containing android.useAndroidX=true, android.enableJetifier=true, org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 and org.gradle.parallel=true.
-29. Use Java 17 and Gradle 8.7 or newer.
-30. Do not mix old buildscript and plugins DSL.
-31. Ensure all Gradle files work together.
-32. Include Gradle wrapper files only if complete.
-33. Generate all dependencies required by app features.
-34. Check all generated resources and Java classes.
+19. Every Java class must have correctly balanced braces.
+20. Every method must be completely inside its class.
+21. Never place statements outside a method or class.
+22. Do not generate stray closing braces.
+23. Do not generate stray }); statements.
+24. Every addOnClickListener must have valid Java syntax.
+25. Prefer standard Android Java anonymous listener classes instead of complicated lambda expressions.
+26. Every referenced Java class must exist.
+27. Every imported class must be available.
+28. Use valid Android APIs.
+29. Do not invent methods or resource IDs.
+30. Check MainActivity.java carefully before returning JSON.
+31. Check all Java files for syntax errors.
+32. Keep Java package declarations consistent with file paths.
 
-CRITICAL XML ID RULES:
-35. Every android:id must have a valid non-empty value.
-36. Never generate android:id="" or android:id=''.
-37. Never generate android:id="@+id/" or android:id="@id/".
-38. Use valid resource IDs such as @+id/main_button.
-39. Resource IDs must use lowercase letters, numbers and underscores.
-40. Check all layout XML files for empty or malformed android:id values.
+ANDROID RESOURCE RULES:
 
-FILE OUTPUT FORMAT:
-Return ONLY valid JSON in this structure:
+33. Every referenced layout, drawable, string, color and style must exist.
+34. Resource filenames must use lowercase letters, numbers and underscores.
+35. Never reference a missing resource.
+36. Do not generate adaptive launcher icons.
+37. Do not reference ic_launcher_foreground.
+38. If generating a launcher icon, create a valid drawable XML named ic_launcher.xml.
+39. If no valid launcher icon is generated, omit icon references from the manifest.
+40. Never use @mipmap/ic_launcher unless that resource actually exists.
+41. Never use @mipmap/ic_launcher_foreground.
+42. Check all XML files for valid syntax.
+
+XML ID RULES:
+
+43. Never generate android:id="".
+44. Never generate android:id="@+id/".
+45. Every generated ID must be valid.
+46. Use IDs such as @+id/main_button.
+47. Do not reference IDs that do not exist.
+
+GRADLE RULES:
+
+48. Use plugins DSL in root build.gradle.
+49. Root build.gradle must use:
+    id 'com.android.application' version '8.6.1' apply false
+50. settings.gradle must contain pluginManagement.
+51. Include google(), mavenCentral() and gradlePluginPortal() in pluginManagement.
+52. Include dependencyResolutionManagement.
+53. Use RepositoriesMode.FAIL_ON_PROJECT_REPOS.
+54. Put dependency repositories only in settings.gradle.
+55. Never use allprojects repositories.
+56. Never use project-level repositories.
+57. Do not use old buildscript configuration.
+58. app/build.gradle must include namespace and applicationId.
+59. Include all dependencies required by the app.
+60. gradle.properties must contain:
+    android.useAndroidX=true
+    android.enableJetifier=true
+    org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+    org.gradle.parallel=true
+
+FINAL SELF-CHECK:
+
+Before returning the project:
+- Review every Java file.
+- Review MainActivity.java line by line.
+- Check all opening and closing braces.
+- Check all listener syntax.
+- Check every XML resource reference.
+- Check manifest activity declarations.
+- Check Gradle plugin versions.
+- Check that all required files exist.
+- Fix detected errors before returning the result.
+
+OUTPUT FORMAT:
+
+Return ONLY valid JSON.
+
 {
   "projectName": "Application Name",
   "files": [
@@ -107,13 +152,13 @@ Return ONLY valid JSON in this structure:
   ]
 }
 
-OUTPUT REQUIREMENTS:
+OUTPUT RULES:
+
 - Include every required project file.
-- There is no fixed number of files.
 - Every path must be relative to the project root.
-- Every content field must contain the complete file.
-- Escape JSON special characters correctly.
-- Do not wrap JSON in Markdown code fences.
+- Every content field must contain complete file contents.
+- Escape JSON characters correctly.
+- Do not use Markdown code fences.
 - Do not include explanations outside JSON.
 `;
 
@@ -138,7 +183,7 @@ OUTPUT REQUIREMENTS:
               }
             ],
             generationConfig: {
-              temperature: 0.2,
+              temperature: 0.1,
               maxOutputTokens: 16384,
               responseMimeType: "application/json"
             }
@@ -199,14 +244,19 @@ OUTPUT REQUIREMENTS:
       if (candidate?.finishReason === "MAX_TOKENS") {
         return res.status(502).json({
           error: "AI project generation was incomplete.",
-          details: "The output token limit was reached."
+          details: "Gemini reached its output token limit."
         });
       }
 
       let project;
 
       try {
-        project = JSON.parse(output);
+        const cleanedOutput = output
+          .replace(/^```(?:json)?\s*/i, "")
+          .replace(/\s*```$/i, "")
+          .trim();
+
+        project = JSON.parse(cleanedOutput);
       } catch {
         return res.status(502).json({
           error: "AI returned invalid project JSON.",
@@ -269,7 +319,6 @@ OUTPUT REQUIREMENTS:
 
         let content = file.content;
 
-        // Fix empty and incomplete Android XML IDs.
         if (
           path.startsWith("app/src/main/res/") &&
           path.endsWith(".xml")
@@ -298,60 +347,13 @@ OUTPUT REQUIREMENTS:
         cleanFiles.push({ path, content });
       }
 
-      // Maintain AndroidX and Gradle properties.
-      const gradlePropertiesPath = "gradle.properties";
-
-      let gradlePropertiesFile = cleanFiles.find(
-        file => file.path === gradlePropertiesPath
-      );
-
-      let propertiesContent = gradlePropertiesFile
-        ? gradlePropertiesFile.content
-        : "";
-
-      const requiredProperties = {
-        "android.useAndroidX": "true",
-        "android.enableJetifier": "true",
-        "org.gradle.jvmargs": "-Xmx2048m -Dfile.encoding=UTF-8",
-        "org.gradle.parallel": "true"
-      };
-
-      const propertyLines = propertiesContent
-        .split(/\r?\n/)
-        .filter(line => line.trim() !== "");
-
-      for (const [key, value] of Object.entries(requiredProperties)) {
-        const index = propertyLines.findIndex(line =>
-          line.trim().replace(/^#\s*/, "").startsWith(key + "=")
-        );
-
-        if (index >= 0) {
-          propertyLines[index] = `${key}=${value}`;
-        } else {
-          propertyLines.push(`${key}=${value}`);
-        }
-      }
-
-      propertiesContent = propertyLines.join("\n") + "\n";
-
-      if (gradlePropertiesFile) {
-        gradlePropertiesFile.content = propertiesContent;
-      } else {
-        gradlePropertiesFile = {
-          path: gradlePropertiesPath,
-          content: propertiesContent
-        };
-
-        cleanFiles.push(gradlePropertiesFile);
-        seenPaths.add(gradlePropertiesPath);
-      }
-
       const requiredFiles = [
         "settings.gradle",
         "build.gradle",
         "app/build.gradle",
         "app/src/main/AndroidManifest.xml",
-        "gradle.properties"
+        "gradle.properties",
+        "app/src/main/java/com/example/generatedapp/MainActivity.java"
       ];
 
       const missingFiles = requiredFiles.filter(
@@ -365,76 +367,172 @@ OUTPUT REQUIREMENTS:
         });
       }
 
-      // Fix launcher foreground icon resource references.
-      const foregroundIconPath =
-        "app/src/main/res/drawable/ic_launcher_foreground.xml";
+      const gradlePropertiesPath = "gradle.properties";
 
-      const foregroundIconExists = cleanFiles.some(
-        file => file.path === foregroundIconPath
+      let gradlePropertiesFile = cleanFiles.find(
+        file => file.path === gradlePropertiesPath
       );
 
-      if (foregroundIconExists) {
-        for (const file of cleanFiles) {
-          if (
-            file.path.startsWith("app/src/main/res/") &&
-            file.path.endsWith(".xml")
-          ) {
-            file.content = file.content.replace(
-              /@mipmap\/ic_launcher_foreground\b/g,
-              "@drawable/ic_launcher_foreground"
-            );
-          }
+      let propertyLines = gradlePropertiesFile.content
+        .split(/\r?\n/)
+        .filter(line => line.trim() !== "");
+
+      const requiredProperties = {
+        "android.useAndroidX": "true",
+        "android.enableJetifier": "true",
+        "org.gradle.jvmargs": "-Xmx2048m -Dfile.encoding=UTF-8",
+        "org.gradle.parallel": "true"
+      };
+
+      for (const [key, value] of Object.entries(requiredProperties)) {
+        const index = propertyLines.findIndex(line =>
+          line.trim().startsWith(key + "=")
+        );
+
+        if (index >= 0) {
+          propertyLines[index] = `${key}=${value}`;
+        } else {
+          propertyLines.push(`${key}=${value}`);
         }
       }
 
-      // Preserve launcher icon checks.
+      gradlePropertiesFile.content =
+        propertyLines.join("\n") + "\n";
+
+      // Check Java package declaration.
+      const mainActivity = cleanFiles.find(
+        file =>
+          file.path ===
+          "app/src/main/java/com/example/generatedapp/MainActivity.java"
+      );
+
+      if (
+        !/package\s+com\.example\.generatedapp\s*;/.test(
+          mainActivity.content
+        )
+      ) {
+        return res.status(502).json({
+          error: "MainActivity Java package is incorrect."
+        });
+      }
+
+      // Basic Java structure checks.
+      for (const file of cleanFiles.filter(
+        item => item.path.endsWith(".java")
+      )) {
+        let balance = 0;
+        let inString = false;
+        let inChar = false;
+        let escaped = false;
+        let inLineComment = false;
+        let inBlockComment = false;
+
+        const source = file.content;
+
+        for (let i = 0; i < source.length; i++) {
+          const char = source[i];
+          const next = source[i + 1];
+
+          if (inLineComment) {
+            if (char === "\n") inLineComment = false;
+            continue;
+          }
+
+          if (inBlockComment) {
+            if (char === "*" && next === "/") {
+              inBlockComment = false;
+              i++;
+            }
+            continue;
+          }
+
+          if (inString || inChar) {
+            if (escaped) {
+              escaped = false;
+              continue;
+            }
+
+            if (char === "\\") {
+              escaped = true;
+              continue;
+            }
+
+            if (inString && char === '"') inString = false;
+            if (inChar && char === "'") inChar = false;
+            continue;
+          }
+
+          if (char === "/" && next === "/") {
+            inLineComment = true;
+            i++;
+            continue;
+          }
+
+          if (char === "/" && next === "*") {
+            inBlockComment = true;
+            i++;
+            continue;
+          }
+
+          if (char === '"') {
+            inString = true;
+            continue;
+          }
+
+          if (char === "'") {
+            inChar = true;
+            continue;
+          }
+
+          if (char === "{") balance++;
+          if (char === "}") balance--;
+
+          if (balance < 0) break;
+        }
+
+        if (balance !== 0 || inString || inChar || inBlockComment) {
+          return res.status(502).json({
+            error: "Java source structure validation failed.",
+            details: file.path
+          });
+        }
+
+        if (/\b(?:TODO|FIXME)\b/.test(source)) {
+          return res.status(502).json({
+            error: "Incomplete Java code was detected.",
+            details: file.path
+          });
+        }
+      }
+
+      // Fix launcher icon references.
       const manifestFile = cleanFiles.find(
         file =>
           file.path === "app/src/main/AndroidManifest.xml"
       );
 
-      const hasLauncherIcon = name => {
-        const allowedExtensions = [
-          ".xml",
-          ".png",
-          ".webp",
-          ".jpg"
-        ];
+      const hasDrawableIcon = cleanFiles.some(
+        file =>
+          file.path ===
+          "app/src/main/res/drawable/ic_launcher.xml"
+      );
 
-        return cleanFiles.some(file => {
-          const prefix = "app/src/main/res/";
+      const hasMipmapIcon = cleanFiles.some(
+        file =>
+          /^app\/src\/main\/res\/mipmap[^/]*\/ic_launcher\.(xml|png|webp|jpg)$/i
+            .test(file.path)
+      );
 
-          if (!file.path.startsWith(prefix)) return false;
-
-          const relativePath = file.path.slice(prefix.length);
-          const parts = relativePath.split("/");
-
-          if (parts.length !== 2) return false;
-          if (!parts[0].startsWith("mipmap")) return false;
-
-          return allowedExtensions.some(extension =>
-            parts[1].toLowerCase() ===
-            (name + extension).toLowerCase()
-          );
-        });
-      };
-
-      if (manifestFile) {
-        if (!hasLauncherIcon("ic_launcher")) {
-          manifestFile.content =
-            manifestFile.content.replace(
-              /\s+android:icon\s*=\s*["']@mipmap\/ic_launcher["']/g,
-              ""
-            );
-        }
-
-        if (!hasLauncherIcon("ic_launcher_round")) {
-          manifestFile.content =
-            manifestFile.content.replace(
-              /\s+android:roundIcon\s*=\s*["']@mipmap\/ic_launcher_round["']/g,
-              ""
-            );
-        }
+      if (!hasDrawableIcon && !hasMipmapIcon) {
+        manifestFile.content = manifestFile.content.replace(
+          /\s+android:icon\s*=\s*["'][^"']+["']/g,
+          ""
+        );
+      } else if (hasDrawableIcon) {
+        manifestFile.content = manifestFile.content.replace(
+          /android:icon\s*=\s*["']@mipmap\/ic_launcher["']/g,
+          'android:icon="@drawable/ic_launcher"'
+        );
       }
 
       // Validate Gradle configuration.
@@ -450,9 +548,7 @@ OUTPUT REQUIREMENTS:
         file => file.path === "app/build.gradle"
       ).content;
 
-      const finalProperties = cleanFiles.find(
-        file => file.path === "gradle.properties"
-      ).content;
+      const finalProperties = gradlePropertiesFile.content;
 
       if (
         /allprojects\s*\{[\s\S]*?repositories\s*\{/i.test(rootGradle) ||
@@ -460,9 +556,7 @@ OUTPUT REQUIREMENTS:
         /^\s*repositories\s*\{/im.test(appGradle)
       ) {
         return res.status(502).json({
-          error: "Invalid Gradle repository configuration.",
-          details:
-            "Project-level repositories are forbidden. Use settings.gradle only."
+          error: "Invalid Gradle repository configuration."
         });
       }
 
@@ -478,7 +572,9 @@ OUTPUT REQUIREMENTS:
       }
 
       if (
-        !/plugins\s*\{[\s\S]*?com\.android\.application[\s\S]*?8\.6\.1[\s\S]*?apply\s+false/i.test(rootGradle)
+        !/com\.android\.application/i.test(rootGradle) ||
+        !/8\.6\.1/.test(rootGradle) ||
+        !/apply\s+false/i.test(rootGradle)
       ) {
         return res.status(502).json({
           error: "Invalid root build.gradle configuration."
@@ -487,8 +583,8 @@ OUTPUT REQUIREMENTS:
 
       if (
         !/com\.android\.application/i.test(appGradle) ||
-        !/namespace\s+/i.test(appGradle) ||
-        !/applicationId\s+/i.test(appGradle)
+        !/namespace\s+/.test(appGradle) ||
+        !/applicationId\s+/.test(appGradle)
       ) {
         return res.status(502).json({
           error: "Invalid app/build.gradle configuration."
@@ -512,8 +608,7 @@ OUTPUT REQUIREMENTS:
 
       if (totalSize > 2 * 1024 * 1024) {
         return res.status(502).json({
-          error: "The generated project is too large.",
-          details: "The current size limit is 2 MB."
+          error: "The generated project is too large."
         });
       }
 
@@ -523,7 +618,7 @@ OUTPUT REQUIREMENTS:
         fileCount: cleanFiles.length,
         files: cleanFiles,
         message:
-          "Android project files generated and Gradle configuration validated."
+          "Android project generated and basic validation completed."
       });
 
     } catch (error) {
