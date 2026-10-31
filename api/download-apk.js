@@ -1,21 +1,17 @@
 
 import { get } from "@vercel/blob";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
-    res.setHeader("Allow", "GET");
-    return res.status(405).json({
-      error: "Only GET requests are supported."
-    });
+    return res.status(405).json({ error: "GET only" });
   }
 
   const token = process.env.BLOB_READ_WRITE_TOKEN;
 
   if (!token) {
     return res.status(500).json({
-      error: "BLOB_READ_WRITE_TOKEN is missing."
+      step: "token",
+      error: "BLOB_READ_WRITE_TOKEN missing"
     });
   }
 
@@ -26,7 +22,8 @@ export default async function handler(req, res) {
     !/^[A-Za-z0-9_-]+-[0-9]+\.zip$/.test(buildId)
   ) {
     return res.status(400).json({
-      error: "A valid buildId is required."
+      step: "buildId",
+      error: "Invalid buildId"
     });
   }
 
@@ -39,41 +36,26 @@ export default async function handler(req, res) {
       token
     });
 
-    if (!result || result.statusCode !== 200 || !result.stream) {
+    if (!result) {
       return res.status(404).json({
-        error: "APK is not available yet."
+        step: "blob",
+        error: "Blob not found"
       });
     }
 
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.android.package-archive"
-    );
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${apkName}"`
-    );
-
-    res.setHeader("Content-Length", result.blob.size);
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Cache-Control", "private, no-store");
-
-    await pipeline(
-      Readable.fromWeb(result.stream),
-      res
-    );
+    return res.status(200).json({
+      step: "get-success",
+      statusCode: result.statusCode,
+      hasStream: Boolean(result.stream),
+      size: result.blob?.size,
+      contentType: result.blob?.contentType
+    });
 
   } catch (error) {
-    console.error("APK download error:", error);
-
-    if (!res.headersSent) {
-      return res.status(500).json({
-        error: "APK download failed.",
-        details: error.message
-      });
-    }
-
-    res.destroy(error);
+    return res.status(500).json({
+      step: "get-error",
+      name: error.name,
+      error: error.message
+    });
   }
 }
