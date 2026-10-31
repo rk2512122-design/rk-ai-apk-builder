@@ -60,6 +60,9 @@ export default async function handler(req, res) {
 
   const zipName = `${safeName}-${Date.now()}.zip`;
 
+  // Use ZIP filename as the unique build ID.
+  const buildId = zipName;
+
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}`;
 
   const headers = {
@@ -70,7 +73,7 @@ export default async function handler(req, res) {
   };
 
   try {
-    // Upload the generated ZIP to the private repository.
+    // Upload Android project ZIP to the private GitHub repository.
     const uploadResponse = await fetch(
       `${apiUrl}/contents/${zipName}`,
       {
@@ -114,7 +117,8 @@ export default async function handler(req, res) {
       return res.status(502).json({
         error: "ZIP uploaded, but APK build could not be started.",
         details: workflowError.message || "Workflow dispatch failed.",
-        zipName
+        zipName,
+        buildId
       });
     }
 
@@ -122,6 +126,7 @@ export default async function handler(req, res) {
       status: "started",
       message: "Android project uploaded. APK build started.",
       zipName,
+      buildId,
       workflowUrl: `https://github.com/${owner}/${repo}/actions`
     });
 
