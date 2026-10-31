@@ -2,10 +2,13 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Only POST requests are supported." });
+    return res.status(405).json({
+      error: "Only POST requests are supported."
+    });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
+
   if (!apiKey) {
     return res.status(500).json({
       error: "GEMINI_API_KEY is missing in Vercel Environment Variables."
@@ -13,6 +16,7 @@ export default async function handler(req, res) {
   }
 
   const { appName, appType, features } = req.body || {};
+
   if (
     !String(appName || "").trim() ||
     !String(appType || "").trim() ||
@@ -60,32 +64,36 @@ ANDROID PROJECT RULES:
 
 LAUNCHER ICON RULES:
 15. Generate valid launcher icon resources.
-16. If launcher icon resources are unavailable, do not reference missing @mipmap/ic_launcher or @mipmap/ic_launcher_round resources.
+16. If launcher icon resources are unavailable, do not reference missing resources.
 17. All manifest icon references must point to existing resources.
+18. If ic_launcher_foreground.xml is generated inside drawable,
+    reference it as @drawable/ic_launcher_foreground.
+19. Never reference a drawable resource using @mipmap.
+20. Ensure adaptive launcher icon XML files reference existing resources.
 
 CRITICAL GRADLE RULES:
-18. Generate settings.gradle with pluginManagement repositories containing google(), mavenCentral() and gradlePluginPortal().
-19. Generate dependencyResolutionManagement with repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS), and repositories containing google() and mavenCentral().
-20. Generate root build.gradle using plugins DSL: id 'com.android.application' version '8.6.1' apply false.
-21. NEVER generate allprojects repositories blocks.
-22. NEVER generate project-level repositories blocks.
-23. Do not use old buildscript configuration.
-24. Generate app/build.gradle with Android application plugin, namespace, applicationId, compileSdk, minSdk and targetSdk.
-25. Generate gradle.properties containing android.useAndroidX=true, android.enableJetifier=true, org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 and org.gradle.parallel=true.
-26. Use Java 17 and Gradle 8.7 or newer.
-27. Do not mix old buildscript and plugins DSL.
-28. Ensure all Gradle files work together.
-29. Include Gradle wrapper files only if complete.
-30. Generate all dependencies required by app features.
-31. Check all generated resources and Java classes.
+21. Generate settings.gradle with pluginManagement repositories containing google(), mavenCentral() and gradlePluginPortal().
+22. Generate dependencyResolutionManagement with repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS), and repositories containing google() and mavenCentral().
+23. Generate root build.gradle using plugins DSL: id 'com.android.application' version '8.6.1' apply false.
+24. NEVER generate allprojects repositories blocks.
+25. NEVER generate project-level repositories blocks.
+26. Do not use old buildscript configuration.
+27. Generate app/build.gradle with Android application plugin, namespace, applicationId, compileSdk, minSdk and targetSdk.
+28. Generate gradle.properties containing android.useAndroidX=true, android.enableJetifier=true, org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 and org.gradle.parallel=true.
+29. Use Java 17 and Gradle 8.7 or newer.
+30. Do not mix old buildscript and plugins DSL.
+31. Ensure all Gradle files work together.
+32. Include Gradle wrapper files only if complete.
+33. Generate all dependencies required by app features.
+34. Check all generated resources and Java classes.
 
 CRITICAL XML ID RULES:
-32. Every android:id must have a valid non-empty value.
-33. Never generate android:id="" or android:id=''.
-34. Never generate android:id="@+id/" or android:id="@id/".
-35. Use valid resource IDs such as @+id/main_button.
-36. Resource IDs must use lowercase letters, numbers and underscores.
-37. Check all layout XML files for empty or malformed android:id values.
+35. Every android:id must have a valid non-empty value.
+36. Never generate android:id="" or android:id=''.
+37. Never generate android:id="@+id/" or android:id="@id/".
+38. Use valid resource IDs such as @+id/main_button.
+39. Resource IDs must use lowercase letters, numbers and underscores.
+40. Check all layout XML files for empty or malformed android:id values.
 
 FILE OUTPUT FORMAT:
 Return ONLY valid JSON in this structure:
@@ -140,6 +148,7 @@ OUTPUT REQUIREMENTS:
       );
 
       let data;
+
       try {
         data = await response.json();
       } catch {
@@ -170,6 +179,7 @@ OUTPUT REQUIREMENTS:
       }
 
       const candidate = data.candidates?.[0];
+
       const output = (data.candidates || [])
         .flatMap(item => item.content?.parts || [])
         .map(part => part.text || "")
@@ -194,6 +204,7 @@ OUTPUT REQUIREMENTS:
       }
 
       let project;
+
       try {
         project = JSON.parse(output);
       } catch {
@@ -289,6 +300,7 @@ OUTPUT REQUIREMENTS:
 
       // Maintain AndroidX and Gradle properties.
       const gradlePropertiesPath = "gradle.properties";
+
       let gradlePropertiesFile = cleanFiles.find(
         file => file.path === gradlePropertiesPath
       );
@@ -329,6 +341,7 @@ OUTPUT REQUIREMENTS:
           path: gradlePropertiesPath,
           content: propertiesContent
         };
+
         cleanFiles.push(gradlePropertiesFile);
         seenPaths.add(gradlePropertiesPath);
       }
@@ -352,6 +365,28 @@ OUTPUT REQUIREMENTS:
         });
       }
 
+      // Fix launcher foreground icon resource references.
+      const foregroundIconPath =
+        "app/src/main/res/drawable/ic_launcher_foreground.xml";
+
+      const foregroundIconExists = cleanFiles.some(
+        file => file.path === foregroundIconPath
+      );
+
+      if (foregroundIconExists) {
+        for (const file of cleanFiles) {
+          if (
+            file.path.startsWith("app/src/main/res/") &&
+            file.path.endsWith(".xml")
+          ) {
+            file.content = file.content.replace(
+              /@mipmap\/ic_launcher_foreground\b/g,
+              "@drawable/ic_launcher_foreground"
+            );
+          }
+        }
+      }
+
       // Preserve launcher icon checks.
       const manifestFile = cleanFiles.find(
         file =>
@@ -359,10 +394,16 @@ OUTPUT REQUIREMENTS:
       );
 
       const hasLauncherIcon = name => {
-        const allowedExtensions = [".xml", ".png", ".webp", ".jpg"];
+        const allowedExtensions = [
+          ".xml",
+          ".png",
+          ".webp",
+          ".jpg"
+        ];
 
         return cleanFiles.some(file => {
           const prefix = "app/src/main/res/";
+
           if (!file.path.startsWith(prefix)) return false;
 
           const relativePath = file.path.slice(prefix.length);
