@@ -1,6 +1,7 @@
 
 import { get } from "@vercel/blob";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -58,13 +59,21 @@ export default async function handler(req, res) {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Cache-Control", "private, no-store");
 
-    Readable.fromWeb(result.stream).pipe(res);
+    await pipeline(
+      Readable.fromWeb(result.stream),
+      res
+    );
 
   } catch (error) {
     console.error("APK download error:", error);
 
-    return res.status(500).json({
-      error: "APK download failed."
-    });
+    if (!res.headersSent) {
+      return res.status(500).json({
+        error: "APK download failed.",
+        details: error.message
+      });
+    }
+
+    res.destroy(error);
   }
 }
