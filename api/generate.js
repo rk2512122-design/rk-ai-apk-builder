@@ -1,3 +1,10 @@
+
+const GEMINI_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
+
+const MAX_FILES = 80;
+const MAX_PROJECT_SIZE = 2 * 1024 * 1024;
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -14,129 +21,20 @@ export default async function handler(req, res) {
     });
   }
 
-  const {
-    mode = "generate",
-    appName,
-    appType,
-    features,
-    files,
-    buildError
-  } = req.body || {};
+  const body = req.body || {};
+  const mode = body.mode || "generate";
 
-  const isRepair = mode === "repair";
+  if (mode === "repair") {
+    return handleRepair(req, res, apiKey, body);
+  }
 
-  if (isRepair) {
-    const secret = process.env.BUILD_CALLBACK_SECRET;
-    const suppliedSecret = req.headers["x-build-callback-secret"];
-
-    if (!secret || suppliedSecret !== secret) {
-      return res.status(401).json({
-        error: "Unauthorized repair request."
-      });
-    }
-
-    if (
-      !Array.isArray(files) ||
-      files.length === 0 ||
-      typeof buildError !== "string"
-    ) {
-      return res.status(400).json({
-        error: "Repair requires project files and build errors."
-      });
-    }
-
-    if (files.length > 80) {
-      return res.status(400).json({
-        error: "Too many project files for repair."
-      });
-    }
-
-    const repairFiles = files.filter(file =>
-      file &&
-      typeof file.path === "string" &&
-      typeof file.content === "string" &&
-      !file.path.startsWith("/") &&
-      !file.path.split("/").includes("..") &&
-      /^[a-zA-Z0-9_./-]+$/.test(file.path)
-    );
-
-    if (repairFiles.length !== files.length) {
-      return res.status(400).json({
-        error: "Invalid project file path detected."
-      });
-    }
-
-    const totalSize = repairFiles.reduce(
-      (sum, file) =>
-        sum + Buffer.byteLength(file.content, "utf8"),
-      0
-    );
-
-    if (totalSize > 2 * 1024 * 1024) {
-      return res.status(413).json({
-        error: "Project files are too large for automatic repair."
-      });
-    }
-
-    const repairPrompt = `
-You are an expert Android Java and Gradle build repair engineer.
-
-A real Android project failed to build.
-
-YOUR TASK:
-Repair the existing project using the compiler errors.
-Do not create a new unrelated project.
-
-BUILD ERRORS:
-${buildError.slice(0, 12000)}
-
-EXISTING PROJECT FILES:
-${JSON.stringify(repairFiles)}
-
-IMPORTANT RULES:
-1. Fix the actual compiler or Android resource errors.
-2. Preserve the app's original purpose and features.
-3. Use Java, not Kotlin.
-4. Keep package names consistent.
-5. Keep Android Gradle Plugin version 8.6.1.
-6. Keep compileSdk 35, minSdk 24 and targetSdk 35.
-7. Do not add unnecessary dependencies.
-8. Do not use missing drawable, mipmap, string, color or style resources.
-9. Every referenced resource must exist.
-10. Fix Java syntax errors, missing imports and invalid methods.
-11. Fix AndroidManifest.xml references.
-12. Fix XML resource errors.
-13. Never add empty or placeholder files.
-14. Do not remove working app features to hide errors.
-15. Keep settings.gradle, build.gradle and app/build.gradle compatible.
-16. Do not add project-level repositories blocks.
-17. Return complete content for every changed file.
-18. Include new files only when genuinely required.
-19. Do not return unchanged files.
-20. If the error cannot be fixed safely, return an empty files array and explain why.
-
-OUTPUT:
-Return ONLY valid JSON:
-{
-  "files": [
-    {
-      "path": "relative/file/path",
-      "content": "complete corrected file content"
-    }
-  ],
-  "message": "Short repair summary"
-}
-
-No Markdown fences. No text outside JSON.
-`;
-
-    return await callGemini({
-      apiKey,
-      prompt: repairPrompt,
-      res,
-      mode: "repair"
+  if (mode !== "generate") {
+    return res.status(400).json({
+      error: "Invalid request mode."
     });
   }
+
+  const { appName, appType, features } = body;
 
   if (
     !String(appName || "").trim() ||
@@ -153,9 +51,9 @@ No Markdown fences. No text outside JSON.
   const safeFeatures = String(features).trim().slice(0, 5000);
 
   const prompt = `
-You are a professional Android application development AI.
+You are an expert Android Java developer.
 
-Generate a COMPLETE, BUILDABLE Android Studio project.
+Create a complete, buildable Android Studio project.
 
 APP NAME:
 ${safeAppName}
@@ -166,66 +64,80 @@ ${safeAppType}
 USER REQUIREMENTS:
 ${safeFeatures}
 
-ANDROID RULES:
-1. Use Java only.
-2. Use Android Gradle Plugin 8.6.1.
-3. Use compileSdk 35, minSdk 24 and targetSdk 35.
-4. Use package name com.example.generatedapp.
-5. Generate all required project files.
-6. Include a working MainActivity.java.
-7. Include a complete AndroidManifest.xml.
-8. Include all required layouts, values and resources.
-9. Never reference a resource that does not exist.
-10. Do not create empty files or placeholders.
-11. Keep Java package names and folder paths consistent.
-12. Do not claim an APK has already been built.
+ANDROID REQUIREMENTS:
 
-LAUNCHER ICON RULES:
-13. Create a valid launcher icon.
-14. Use drawable resources for drawable files.
-15. Use mipmap resources only for mipmap files.
-16. Never reference @mipmap/ic_launcher_foreground.
-17. If an adaptive icon is used, its foreground and background resources must exist.
-18. If a launcher icon cannot be generated, remove the missing icon reference from the manifest.
+1. Use Java only. Never use Kotlin.
+2. Package name: com.example.generatedapp.
+3. Android Gradle Plugin version 8.6.1.
+4. compileSdk 35.
+5. minSdk 24.
+6. targetSdk 35.
+7. Java 17.
+8. Include settings.gradle.
+9. Include root build.gradle.
+10. Include app/build.gradle.
+11. Include gradle.properties.
+12. Include app/src/main/AndroidManifest.xml.
+13. Include app/src/main/java/com/example/generatedapp/MainActivity.java.
+14. Include every required layout and resource.
+15. Include a working launcher Activity.
+16. All referenced resources must exist.
+17. Never generate empty or placeholder files.
+18. Do not include incomplete Gradle wrapper files.
+19. Do not claim that the APK is already built.
+
+JAVA RULES:
+
+20. Check every Java file for syntax errors.
+21. All braces and parentheses must be balanced.
+22. All methods must be inside the correct class.
+23. Never put statements outside methods.
+24. Every click listener must have valid Java syntax.
+25. Prefer standard anonymous listener classes.
+26. Never generate stray }); statements.
+27. Every import and referenced class must exist.
+28. Java package declarations must match file paths.
+
+RESOURCE RULES:
+
+29. Every referenced resource must exist.
+30. Resource filenames must use lowercase letters, numbers and underscores.
+31. Never reference a missing drawable, mipmap, string, color or style.
+32. Do not generate adaptive launcher icons.
+33. Create a valid drawable/ic_launcher.xml launcher icon.
+34. If no launcher icon is generated, omit icon references from the manifest.
+35. Never reference @mipmap/ic_launcher_foreground.
+36. Every XML file must be valid.
+37. Never generate empty android:id values.
+38. Use valid IDs such as @+id/main_button.
 
 GRADLE RULES:
-19. settings.gradle must contain pluginManagement repositories:
-    google(), mavenCentral(), gradlePluginPortal().
-20. settings.gradle must contain dependencyResolutionManagement.
-21. Use repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS).
-22. Root build.gradle must use plugins DSL.
-23. Use id 'com.android.application' version '8.6.1' apply false.
-24. Do not use old buildscript configuration.
-25. Do not create allprojects repositories blocks.
-26. Do not create project-level repositories blocks.
-27. app/build.gradle must contain namespace and applicationId.
-28. Use Java 17.
-29. gradle.properties must contain:
+
+39. Use plugins DSL.
+40. Root build.gradle must contain:
+    id 'com.android.application' version '8.6.1' apply false
+41. settings.gradle must contain pluginManagement.
+42. Include google(), mavenCentral() and gradlePluginPortal() in pluginManagement.
+43. Include dependencyResolutionManagement.
+44. Use RepositoriesMode.FAIL_ON_PROJECT_REPOS.
+45. Keep dependency repositories only in settings.gradle.
+46. Never use allprojects repositories.
+47. Never use project-level repositories.
+48. Do not use old buildscript configuration.
+49. app/build.gradle must contain namespace and applicationId.
+50. gradle.properties must contain:
     android.useAndroidX=true
     android.enableJetifier=true
     org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
     org.gradle.parallel=true
-30. Ensure Gradle files are compatible.
 
-JAVA RULES:
-31. Check all braces, parentheses and semicolons.
-32. Check all imports.
-33. Check every method is inside the correct class.
-34. Do not put statements outside methods.
-35. Check all click listeners and callbacks.
-36. Ensure MainActivity compiles.
+FINAL CHECK:
+Review all Java, XML, manifest and Gradle files.
+Fix detected errors before returning the project.
 
-XML RULES:
-37. Never generate empty android:id values.
-38. Never generate android:id="@+id/".
-39. Use valid lowercase resource IDs.
-40. Check XML tags are correctly opened and closed.
-41. Check all referenced resources exist.
-
-OUTPUT FORMAT:
-Return ONLY valid JSON:
+RETURN ONLY VALID JSON:
 {
-  "projectName": "${safeAppName}",
+  "projectName": "Application Name",
   "files": [
     {
       "path": "settings.gradle",
@@ -234,78 +146,260 @@ Return ONLY valid JSON:
   ]
 }
 
-OUTPUT REQUIREMENTS:
-- Include all required project files.
-- Every path must be relative to project root.
-- Every content field must contain the complete file.
-- Escape JSON special characters correctly.
-- Do not use Markdown code fences.
-- Do not write explanations outside JSON.
+No Markdown fences.
+No explanation outside JSON.
+Every file must contain complete content.
+Every path must be relative to the project root.
 `;
 
-  return await callGemini({
-    apiKey,
-    prompt,
-    res,
-    mode: "generate"
+  const result = await callGemini(apiKey, prompt);
+
+  if (!result.ok) {
+    return res.status(502).json({
+      error: result.error,
+      details: result.details
+    });
+  }
+
+  return validateProject(result.data, res, safeAppName);
+}
+
+
+async function handleRepair(req, res, apiKey, body) {
+  const secret = process.env.BUILD_CALLBACK_SECRET;
+  const suppliedSecret = req.headers["x-build-callback-secret"];
+
+  if (!secret || suppliedSecret !== secret) {
+    return res.status(401).json({
+      error: "Unauthorized repair request."
+    });
+  }
+
+  if (
+    !Array.isArray(body.files) ||
+    body.files.length === 0 ||
+    typeof body.buildError !== "string"
+  ) {
+    return res.status(400).json({
+      error: "Repair requires project files and build errors."
+    });
+  }
+
+  if (body.files.length > MAX_FILES) {
+    return res.status(400).json({
+      error: "Too many project files."
+    });
+  }
+
+  const files = [];
+  const seen = new Set();
+
+  for (const file of body.files) {
+    if (
+      !file ||
+      typeof file.path !== "string" ||
+      typeof file.content !== "string"
+    ) {
+      return res.status(400).json({
+        error: "Invalid repair file."
+      });
+    }
+
+    const path = safePath(file.path);
+
+    if (!path || seen.has(path)) {
+      return res.status(400).json({
+        error: "Invalid or duplicate repair file path."
+      });
+    }
+
+    seen.add(path);
+    files.push({ path, content: file.content });
+  }
+
+  const totalSize = files.reduce(
+    (sum, file) =>
+      sum + Buffer.byteLength(file.content, "utf8"),
+    0
+  );
+
+  if (totalSize > MAX_PROJECT_SIZE) {
+    return res.status(413).json({
+      error: "Project files are too large for repair."
+    });
+  }
+
+  const prompt = `
+You are an expert Android Java and Gradle repair engineer.
+
+Repair the existing Android project. Do not create an unrelated project.
+
+BUILD ERROR:
+${body.buildError.slice(-12000)}
+
+EXISTING PROJECT FILES:
+${JSON.stringify(files)}
+
+RULES:
+1. Fix the actual build errors.
+2. Preserve the original app purpose and features.
+3. Use Java only.
+4. Keep package name com.example.generatedapp.
+5. Keep Android Gradle Plugin 8.6.1.
+6. Keep compileSdk 35, minSdk 24 and targetSdk 35.
+7. Fix Java syntax errors and missing imports.
+8. Fix invalid Android XML and missing resources.
+9. Fix manifest references.
+10. Fix Gradle configuration only when necessary.
+11. Do not add unnecessary dependencies.
+12. Do not remove working app features to hide errors.
+13. Return complete contents of every changed file.
+14. Include new files only when required.
+15. Do not return unchanged files.
+16. If you cannot safely repair the project, return an empty files array.
+
+RETURN ONLY JSON:
+{
+  "files": [
+    {
+      "path": "relative/file/path",
+      "content": "complete corrected content"
+    }
+  ],
+  "message": "Short repair summary"
+}
+
+No Markdown fences or extra text.
+`;
+
+  const result = await callGemini(apiKey, prompt);
+
+  if (!result.ok) {
+    return res.status(502).json({
+      error: "AI repair request failed.",
+      details: result.details
+    });
+  }
+
+  const project = result.data;
+
+  if (
+    !project ||
+    !Array.isArray(project.files) ||
+    project.files.length === 0
+  ) {
+    return res.status(422).json({
+      error: "AI could not repair the project.",
+      details: project?.message || "No repaired files returned."
+    });
+  }
+
+  if (project.files.length > MAX_FILES) {
+    return res.status(422).json({
+      error: "Too many repaired files returned."
+    });
+  }
+
+  const repaired = [];
+  const repairedPaths = new Set();
+
+  for (const file of project.files) {
+    if (
+      !file ||
+      typeof file.path !== "string" ||
+      typeof file.content !== "string"
+    ) {
+      return res.status(422).json({
+        error: "AI returned an invalid repaired file."
+      });
+    }
+
+    const path = safePath(file.path);
+
+    if (!path || repairedPaths.has(path)) {
+      return res.status(422).json({
+        error: "Invalid or duplicate repaired file path."
+      });
+    }
+
+    repairedPaths.add(path);
+
+    if (
+      path.endsWith(".java") &&
+      !checkJavaBraces(file.content)
+    ) {
+      return res.status(422).json({
+        error: "AI returned Java with unbalanced braces.",
+        details: path
+      });
+    }
+
+    repaired.push({ path, content: file.content });
+  }
+
+  const repairedSize = repaired.reduce(
+    (sum, file) =>
+      sum + Buffer.byteLength(file.content, "utf8"),
+    0
+  );
+
+  if (repairedSize > MAX_PROJECT_SIZE) {
+    return res.status(413).json({
+      error: "Repaired files are too large."
+    });
+  }
+
+  return res.status(200).json({
+    status: "repaired",
+    files: repaired,
+    message: project.message || "AI repair completed."
   });
 }
 
 
-async function callGemini({ apiKey, prompt, res, mode }) {
-  const maxAttempts = 3;
-  const retryableStatuses = [429, 500, 502, 503, 504];
+async function callGemini(apiKey, prompt) {
+  const retryable = [429, 500, 502, 503, 504];
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [{ text: prompt }]
-              }
-            ],
-            generationConfig: {
-              temperature: 0.1,
-              maxOutputTokens: 16384,
-              responseMimeType: "application/json"
+      const response = await fetch(GEMINI_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: prompt }]
             }
-          }),
-          signal: AbortSignal.timeout(60000)
-        }
-      );
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 16384,
+            responseMimeType: "application/json"
+          }
+        }),
+        signal: AbortSignal.timeout(60000)
+      });
 
       const data = await response.json();
 
       if (!response.ok) {
         const message =
           data.error?.message ||
-          `Google API returned HTTP ${response.status}.`;
+          `Google API HTTP ${response.status}`;
 
-        if (
-          retryableStatuses.includes(response.status) &&
-          attempt < maxAttempts
-        ) {
+        if (retryable.includes(response.status) && attempt < 3) {
           await wait(attempt * 2000);
           continue;
         }
 
-        return res.status(502).json({
-          error: "Gemini could not generate the project.",
-          details: message
-        });
+        return { ok: false, details: message };
       }
 
       const candidate = data.candidates?.[0];
-
       const output = (data.candidates || [])
         .flatMap(item => item.content?.parts || [])
         .map(part => part.text || "")
@@ -313,85 +407,55 @@ async function callGemini({ apiKey, prompt, res, mode }) {
         .trim();
 
       if (!output) {
-        if (attempt < maxAttempts) {
-          await wait(attempt * 2000);
-          continue;
-        }
-
-        return res.status(502).json({
+        return {
+          ok: false,
           error: "Gemini returned no project data.",
           details:
             data.promptFeedback?.blockReason ||
             candidate?.finishReason ||
             "Empty response."
-        });
+        };
       }
 
       if (candidate?.finishReason === "MAX_TOKENS") {
-        if (attempt < maxAttempts) {
-          await wait(attempt * 2000);
-          continue;
-        }
-
-        return res.status(502).json({
-          error: "AI project generation was incomplete.",
-          details: "Gemini reached its output token limit."
-        });
+        return {
+          ok: false,
+          details: "Gemini output reached its token limit."
+        };
       }
 
-      const project = parseJsonResponse(output);
+      const parsed = parseJson(output);
 
-      if (!project) {
-        if (attempt < maxAttempts) {
-          await wait(attempt * 2000);
-          continue;
-        }
-
-        return res.status(502).json({
-          error: "AI returned invalid project JSON.",
-          details: "Automatic JSON retry attempts were exhausted."
-        });
+      if (!parsed) {
+        return {
+          ok: false,
+          details: "Gemini response was not valid complete JSON."
+        };
       }
 
-      if (mode === "repair") {
-        return validateRepair(project, res);
-      }
-
-      return validateProject(project, res);
+      return { ok: true, data: parsed };
 
     } catch (error) {
-      console.error("Gemini request error:", {
-        mode,
-        attempt,
-        name: error.name,
-        message: error.message
-      });
-
-      const timedOut =
-        error.name === "TimeoutError" ||
-        error.name === "AbortError";
-
-      if (attempt < maxAttempts) {
+      if (attempt < 3) {
         await wait(attempt * 2000);
         continue;
       }
 
-      return res.status(timedOut ? 504 : 502).json({
-        error: timedOut
-          ? "Gemini request timed out."
-          : "Could not get a response from Gemini.",
+      return {
+        ok: false,
         details: error.message
-      });
+      };
     }
   }
 
-  return res.status(502).json({
-    error: "All Gemini attempts failed."
-  });
+  return {
+    ok: false,
+    details: "All Gemini attempts failed."
+  };
 }
 
 
-function parseJsonResponse(output) {
+function parseJson(output) {
   const cleaned = output
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
@@ -401,107 +465,50 @@ function parseJsonResponse(output) {
     return JSON.parse(cleaned);
   } catch {}
 
-  const firstBrace = cleaned.indexOf("{");
-  const lastBrace = cleaned.lastIndexOf("}");
+  const start = cleaned.indexOf("{");
 
-  if (firstBrace < 0 || lastBrace <= firstBrace) {
-    return null;
-  }
+  if (start < 0) return null;
 
-  try {
-    return JSON.parse(
-      cleaned.slice(firstBrace, lastBrace + 1)
-    );
-  } catch {
-    return null;
-  }
-}
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
 
+  for (let i = start; i < cleaned.length; i++) {
+    const char = cleaned[i];
 
-function validateRepair(project, res) {
-  if (!project || !Array.isArray(project.files)) {
-    return res.status(502).json({
-      error: "AI returned an invalid repair response."
-    });
-  }
-
-  if (project.files.length === 0) {
-    return res.status(422).json({
-      error: "AI could not safely repair this build.",
-      details: project.message || "No corrected files were returned."
-    });
-  }
-
-  if (project.files.length > 80) {
-    return res.status(502).json({
-      error: "Too many repaired files were returned."
-    });
-  }
-
-  const seen = new Set();
-  const cleanFiles = [];
-
-  for (const file of project.files) {
-    if (
-      !file ||
-      typeof file.path !== "string" ||
-      typeof file.content !== "string"
-    ) {
-      return res.status(502).json({
-        error: "Invalid repaired file."
-      });
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
     }
 
-    const path = file.path.replace(/\\/g, "/").trim();
+    if (char === '"') {
+      inString = true;
+    } else if (char === "{") {
+      depth++;
+    } else if (char === "}") {
+      depth--;
 
-    if (
-      !path ||
-      path.startsWith("/") ||
-      path.split("/").includes("..") ||
-      !/^[a-zA-Z0-9_./-]+$/.test(path)
-    ) {
-      return res.status(502).json({
-        error: "Unsafe repaired file path.",
-        details: path
-      });
-    }
-
-    if (seen.has(path)) {
-      return res.status(502).json({
-        error: "Duplicate repaired file path.",
-        details: path
-      });
-    }
-
-    seen.add(path);
-
-    if (
-      path.startsWith("app/src/main/res/") &&
-      path.endsWith(".xml")
-    ) {
-      const invalidId =
-        /\bandroid:id\s*=\s*(["'])\s*(?:@(?:\+)?id\/)?\s*\1/;
-
-      if (invalidId.test(file.content)) {
-        return res.status(422).json({
-          error: "Repair returned an invalid Android XML ID.",
-          details: path
-        });
+      if (depth === 0) {
+        try {
+          return JSON.parse(cleaned.slice(start, i + 1));
+        } catch {
+          return null;
+        }
       }
     }
-
-    cleanFiles.push({ path, content: file.content });
   }
 
-  return res.status(200).json({
-    status: "repaired",
-    files: cleanFiles,
-    message: project.message || "Project repair completed."
-  });
+  return null;
 }
 
 
-function validateProject(project, res) {
+function validateProject(project, res, appName) {
   if (
     !project ||
     !Array.isArray(project.files) ||
@@ -512,13 +519,13 @@ function validateProject(project, res) {
     });
   }
 
-  if (project.files.length > 80) {
+  if (project.files.length > MAX_FILES) {
     return res.status(502).json({
-      error: "The project contains too many files."
+      error: "Too many project files were returned."
     });
   }
 
-  const cleanFiles = [];
+  const files = [];
   const seen = new Set();
 
   for (const file of project.files) {
@@ -528,28 +535,16 @@ function validateProject(project, res) {
       typeof file.content !== "string"
     ) {
       return res.status(502).json({
-        error: "An invalid project file was returned."
+        error: "Invalid project file."
       });
     }
 
-    const path = file.path.replace(/\\/g, "/").trim();
+    const path = safePath(file.path);
 
-    if (
-      !path ||
-      path.startsWith("/") ||
-      path.split("/").includes("..") ||
-      !/^[a-zA-Z0-9_./-]+$/.test(path)
-    ) {
+    if (!path || seen.has(path)) {
       return res.status(502).json({
-        error: "An unsafe project file path was detected.",
-        details: path
-      });
-    }
-
-    if (seen.has(path)) {
-      return res.status(502).json({
-        error: "Duplicate project file was detected.",
-        details: path
+        error: "Unsafe or duplicate project path.",
+        details: file.path
       });
     }
 
@@ -571,60 +566,73 @@ function validateProject(project, res) {
         ""
       );
 
-      const invalidId =
-        /\bandroid:id\s*=\s*(["'])\s*(?:@(?:\+)?id\/)?\s*\1/;
-
-      if (invalidId.test(content)) {
+      if (
+        /\bandroid:id\s*=\s*(["'])\s*(?:@(?:\+)?id\/)?\s*\1/.test(content)
+      ) {
         return res.status(422).json({
-          error: "Invalid empty Android XML ID detected.",
+          error: "Invalid empty Android XML ID.",
           details: path
         });
       }
     }
 
-    cleanFiles.push({ path, content });
+    files.push({ path, content });
   }
 
-  const requiredFiles = [
+  const required = [
     "settings.gradle",
     "build.gradle",
     "app/build.gradle",
-    "app/src/main/AndroidManifest.xml"
+    "app/src/main/AndroidManifest.xml",
+    "app/src/main/java/com/example/generatedapp/MainActivity.java"
   ];
 
-  const missing = requiredFiles.filter(
-    path => !seen.has(path)
-  );
+  const missing = required.filter(path => !seen.has(path));
 
-  if (missing.length > 0) {
+  if (missing.length) {
     return res.status(422).json({
-      error: "The Android project is missing required files.",
+      error: "Required Android files are missing.",
       missingFiles: missing
     });
   }
 
-  ensureGradleProperties(cleanFiles);
+  ensureGradleProperties(files);
 
-  fixLauncherReferences(cleanFiles);
-
-  const rootGradle = getFile(cleanFiles, "build.gradle");
-  const settingsGradle = getFile(cleanFiles, "settings.gradle");
-  const appGradle = getFile(cleanFiles, "app/build.gradle");
+  const mainActivity = files.find(
+    file =>
+      file.path ===
+      "app/src/main/java/com/example/generatedapp/MainActivity.java"
+  );
 
   if (
-    /allprojects\s*\{[\s\S]*?repositories\s*\{/i.test(rootGradle) ||
-    /^\s*repositories\s*\{/im.test(rootGradle) ||
-    /^\s*repositories\s*\{/im.test(appGradle)
+    !/package\s+com\.example\.generatedapp\s*;/.test(
+      mainActivity.content
+    )
   ) {
     return res.status(422).json({
-      error: "Invalid Gradle repository configuration."
+      error: "MainActivity package declaration is incorrect."
     });
   }
 
+  for (const file of files.filter(
+    item => item.path.endsWith(".java")
+  )) {
+    if (!checkJavaBraces(file.content)) {
+      return res.status(422).json({
+        error: "Java structure validation failed.",
+        details: file.path
+      });
+    }
+  }
+
+  const settings = getContent(files, "settings.gradle");
+  const root = getContent(files, "build.gradle");
+  const app = getContent(files, "app/build.gradle");
+
   if (
-    !/pluginManagement\s*\{/i.test(settingsGradle) ||
-    !/dependencyResolutionManagement\s*\{/i.test(settingsGradle) ||
-    !/FAIL_ON_PROJECT_REPOS/i.test(settingsGradle)
+    !/pluginManagement\s*\{/.test(settings) ||
+    !/dependencyResolutionManagement\s*\{/.test(settings) ||
+    !/FAIL_ON_PROJECT_REPOS/.test(settings)
   ) {
     return res.status(422).json({
       error: "Invalid settings.gradle configuration."
@@ -632,9 +640,9 @@ function validateProject(project, res) {
   }
 
   if (
-    !/com\.android\.application/i.test(rootGradle) ||
-    !/8\.6\.1/i.test(rootGradle) ||
-    !/apply\s+false/i.test(rootGradle)
+    !/com\.android\.application/.test(root) ||
+    !/8\.6\.1/.test(root) ||
+    !/apply\s+false/.test(root)
   ) {
     return res.status(422).json({
       error: "Invalid root build.gradle configuration."
@@ -642,43 +650,42 @@ function validateProject(project, res) {
   }
 
   if (
-    !/com\.android\.application/i.test(appGradle) ||
-    !/namespace\s+/i.test(appGradle) ||
-    !/applicationId\s+/i.test(appGradle)
+    !/com\.android\.application/.test(app) ||
+    !/namespace\s+/.test(app) ||
+    !/applicationId\s+/.test(app)
   ) {
     return res.status(422).json({
       error: "Invalid app/build.gradle configuration."
     });
   }
 
-  const manifest = getFile(
-    cleanFiles,
-    "app/src/main/AndroidManifest.xml"
-  );
-
-  if (!/<manifest[\s>]/i.test(manifest)) {
+  if (
+    /allprojects\s*\{[\s\S]*?repositories\s*\{/i.test(root) ||
+    /^\s*repositories\s*\{/im.test(root) ||
+    /^\s*repositories\s*\{/im.test(app)
+  ) {
     return res.status(422).json({
-      error: "AndroidManifest.xml is invalid."
+      error: "Project-level repositories are not allowed."
     });
   }
 
-  const totalSize = cleanFiles.reduce(
+  const totalSize = files.reduce(
     (sum, file) =>
       sum + Buffer.byteLength(file.content, "utf8"),
     0
   );
 
-  if (totalSize > 2 * 1024 * 1024) {
+  if (totalSize > MAX_PROJECT_SIZE) {
     return res.status(413).json({
-      error: "The generated project is too large."
+      error: "Generated project is too large."
     });
   }
 
   return res.status(200).json({
     status: "completed",
-    projectName: project.projectName || "Android App",
-    fileCount: cleanFiles.length,
-    files: cleanFiles,
+    projectName: project.projectName || appName,
+    fileCount: files.length,
+    files,
     message: "Android project generated and validated."
   });
 }
@@ -686,7 +693,6 @@ function validateProject(project, res) {
 
 function ensureGradleProperties(files) {
   const path = "gradle.properties";
-
   let file = files.find(item => item.path === path);
 
   const required = {
@@ -722,64 +728,91 @@ function ensureGradleProperties(files) {
 }
 
 
-function fixLauncherReferences(files) {
-  const manifest = files.find(
-    file =>
-      file.path === "app/src/main/AndroidManifest.xml"
-  );
+function safePath(value) {
+  const path = value.replace(/\\/g, "/").trim();
 
-  if (!manifest) return;
-
-  const exists = path =>
-    files.some(file => file.path === path);
-
-  const foregroundPath =
-    "app/src/main/res/drawable/ic_launcher_foreground.xml";
-
-  if (exists(foregroundPath)) {
-    for (const file of files) {
-      if (
-        file.path.startsWith("app/src/main/res/") &&
-        file.path.endsWith(".xml")
-      ) {
-        file.content = file.content.replace(
-          /@mipmap\/ic_launcher_foreground\b/g,
-          "@drawable/ic_launcher_foreground"
-        );
-      }
-    }
+  if (
+    !path ||
+    path.startsWith("/") ||
+    path.split("/").includes("..") ||
+    !/^[a-zA-Z0-9_./-]+$/.test(path)
+  ) {
+    return null;
   }
 
-  const iconExists = name =>
-    files.some(file => {
-      const match = file.path.match(
-        /^app\/src\/main\/res\/(mipmap[^/]+)\/([^/]+)$/
-      );
-
-      return Boolean(
-        match &&
-        match[2].replace(/\.(xml|png|webp|jpg)$/i, "") === name
-      );
-    });
-
-  if (!iconExists("ic_launcher")) {
-    manifest.content = manifest.content.replace(
-      /\s+android:icon\s*=\s*["']@mipmap\/ic_launcher["']/g,
-      ""
-    );
-  }
-
-  if (!iconExists("ic_launcher_round")) {
-    manifest.content = manifest.content.replace(
-      /\s+android:roundIcon\s*=\s*["']@mipmap\/ic_launcher_round["']/g,
-      ""
-    );
-  }
+  return path;
 }
 
 
-function getFile(files, path) {
+function getContent(files, path) {
   return files.find(file => file.path === path)?.content || "";
+}
+
+
+function checkJavaBraces(source) {
+  let depth = 0;
+  let string = false;
+  let character = false;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    const next = source[i + 1];
+
+    if (lineComment) {
+      if (c === "\n") lineComment = false;
+      continue;
+    }
+
+    if (blockComment) {
+      if (c === "*" && next === "/") {
+        blockComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (string || character) {
+      if (escaped) {
+        escaped = false;
+      } else if (c === "\\") {
+        escaped = true;
+      } else if (string && c === '"') {
+        string = false;
+      } else if (character && c === "'") {
+        character = false;
+      }
+      continue;
+    }
+
+    if (c === "/" && next === "/") {
+      lineComment = true;
+      i++;
+      continue;
+    }
+
+    if (c === "/" && next === "*") {
+      blockComment = true;
+      i++;
+      continue;
+    }
+
+    if (c === '"') string = true;
+    else if (c === "'") character = true;
+    else if (c === "{") depth++;
+    else if (c === "}") depth--;
+
+    if (depth < 0) return false;
+  }
+
+  return (
+    depth === 0 &&
+    !string &&
+    !character &&
+    !blockComment
+  );
 }
 
 
