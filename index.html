@@ -5,6 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RK AI APK Builder</title>
+
 <style>
 *{box-sizing:border-box}
 body{margin:0;padding:16px;font-family:Arial,sans-serif;background:#0b1220;color:white}
@@ -15,8 +16,9 @@ label{display:block;margin-top:18px;font-weight:bold}
 input,textarea,select,button{width:100%;padding:13px;margin-top:8px;border-radius:8px;font-size:16px}
 input,textarea,select{background:#0b1220;color:white;border:1px solid #40516e}
 button{border:0;background:#18bfc9;color:#07111e;font-weight:bold;cursor:pointer}
-button:disabled{opacity:.6}
+button:disabled{opacity:.6;cursor:not-allowed}
 #downloadBtn{background:#57e39b;margin-top:12px}
+#apkDownloadBtn{background:#57e39b;margin-top:12px}
 #buildBtn{background:#ffbd59;margin-top:12px}
 #copyBtn{background:#8da8ff;margin-top:12px}
 #result{display:none;margin-top:20px;padding:14px;background:#0b1220;border-radius:10px;overflow-wrap:anywhere}
@@ -27,9 +29,12 @@ button:disabled{opacity:.6}
 a{color:#18e5ee;overflow-wrap:anywhere}
 </style>
 </head>
+
 <body>
 <main class="card">
+
 <h1>⚡ RK AI APK Builder</h1>
+
 <p>अपना ऐप आइडिया लिखें। AI से पूरा Android प्रोजेक्ट बनवाएँ, ZIP डाउनलोड करें या APK Build शुरू करें।</p>
 
 <label for="appname">ऐप का नाम</label>
@@ -65,33 +70,61 @@ a{color:#18e5ee;overflow-wrap:anywhere}
 <button id="generateBtn" onclick="generateApp()">AI से पूरा ऐप बनवाएँ</button>
 
 <section id="result">
+
 <strong id="resultTitle">AI का जवाब</strong>
 <p id="status" class="status"></p>
+
 <div id="fileInfo"></div>
 <div id="workflowLink"></div>
+
 <pre id="output"></pre>
 
-<button id="downloadBtn" onclick="downloadProject()" hidden>Android Project ZIP डाउनलोड करें</button>
-<button id="buildBtn" onclick="buildApk()" hidden>🚀 APK बनाएँ</button>
-<button id="copyBtn" onclick="copyResult()">जवाब कॉपी करें</button>
+<button id="downloadBtn" onclick="downloadProject()" hidden>
+Android Project ZIP डाउनलोड करें
+</button>
+
+<button id="buildBtn" onclick="buildApk()" hidden>
+🚀 APK बनाएँ
+</button>
+
+<button id="apkDownloadBtn" onclick="downloadApk()" hidden>
+📥 APK Download करें
+</button>
+
+<button id="copyBtn" onclick="copyResult()">
+जवाब कॉपी करें
+</button>
+
 </section>
 
 <p class="note">नोट: ZIP एक Android Studio प्रोजेक्ट है। APK बनाने के लिए GitHub Build System का उपयोग होगा।</p>
 <p class="small">RK AI APK Builder</p>
+
 </main>
 
 <script>
 let generatedFiles=[];
 let generatedText="";
+let currentBuildId="";
+let pollTimer=null;
+let pollAttempts=0;
 
 const $=id=>document.getElementById(id);
 
 async function readResponse(response){
  const text=await response.text();
  let data;
- try{data=JSON.parse(text)}
- catch{throw new Error("सर्वर का जवाब पढ़ा नहीं जा सका।")}
- if(!response.ok)throw new Error(data.error||"API Error: "+response.status);
+
+ try{
+  data=JSON.parse(text);
+ }catch{
+  throw new Error("सर्वर का जवाब पढ़ा नहीं जा सका।");
+ }
+
+ if(!response.ok){
+  throw new Error(data.error||"API Error: "+response.status);
+ }
+
  return data;
 }
 
@@ -115,8 +148,11 @@ function validateFiles(files){
      !/^[a-zA-Z0-9_./-]+$/.test(path))
    throw new Error("असुरक्षित फाइल पाथ मिला: "+path);
 
-  if(seen.has(path))throw new Error("एक ही फाइल दो बार मिली: "+path);
+  if(seen.has(path))
+   throw new Error("एक ही फाइल दो बार मिली: "+path);
+
   seen.add(path);
+  file.path=path;
   total+=new TextEncoder().encode(file.content).length;
  }
 
@@ -128,6 +164,7 @@ function validateFiles(files){
   "app/build.gradle",
   "app/src/main/AndroidManifest.xml"
  ];
+
  const missing=required.filter(path=>!seen.has(path));
 
  if(missing.length)
@@ -137,6 +174,7 @@ function validateFiles(files){
 }
 
 async function generateApp(){
+
  const appName=$("appname").value.trim();
  const appType=$("apptype").value;
  const features=$("features").value.trim();
@@ -158,10 +196,19 @@ async function generateApp(){
  $("workflowLink").innerHTML="";
  $("downloadBtn").hidden=true;
  $("buildBtn").hidden=true;
+ $("apkDownloadBtn").hidden=true;
+
  generatedFiles=[];
  generatedText="";
+ currentBuildId="";
+
+ if(pollTimer){
+  clearTimeout(pollTimer);
+  pollTimer=null;
+ }
 
  try{
+
   const response=await fetch("/api/generate",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
@@ -178,26 +225,33 @@ async function generateApp(){
 
   $("resultTitle").textContent="Android प्रोजेक्ट तैयार है";
   $("status").textContent="सफलतापूर्वक फाइलें तैयार हो गईं।";
+
   $("fileInfo").textContent=
    "कुल "+generatedFiles.length+" फाइलें तैयार हुईं।";
 
-  $("output").textContent=generatedFiles.map(file=>file.path).join("\n");
+  $("output").textContent=
+   generatedFiles.map(file=>file.path).join("\n");
 
   $("downloadBtn").hidden=false;
   $("buildBtn").hidden=false;
 
  }catch(error){
+
   generatedFiles=[];
+
   $("resultTitle").textContent="त्रुटि";
   $("status").textContent="प्रोजेक्ट तैयार नहीं हुआ।";
   $("output").textContent=error.message;
+
  }finally{
+
   button.disabled=false;
   button.textContent="AI से पूरा ऐप बनवाएँ";
  }
 }
 
 function makeZip(files){
+
  const encoder=new TextEncoder();
  const localParts=[];
  const centralParts=[];
@@ -205,25 +259,38 @@ function makeZip(files){
 
  function crc32(bytes){
   let crc=0xffffffff;
+
   for(const byte of bytes){
    crc^=byte;
+
    for(let j=0;j<8;j++)
     crc=(crc>>>1)^((crc&1)?0xedb88320:0);
   }
+
   return (crc^0xffffffff)>>>0;
  }
 
- function header(size){return new Uint8Array(size)}
- function w16(view,pos,value){view.setUint16(pos,value,true)}
- function w32(view,pos,value){view.setUint32(pos,value>>>0,true)}
+ function header(size){
+  return new Uint8Array(size);
+ }
+
+ function w16(view,pos,value){
+  view.setUint16(pos,value,true);
+ }
+
+ function w32(view,pos,value){
+  view.setUint32(pos,value>>>0,true);
+ }
 
  for(const file of files){
+
   const name=encoder.encode(file.path);
   const data=encoder.encode(file.content);
   const crc=crc32(data);
 
   const local=header(30+name.length);
   const lv=new DataView(local.buffer);
+
   w32(lv,0,0x04034b50);
   w16(lv,4,20);
   w16(lv,6,0x0800);
@@ -232,11 +299,13 @@ function makeZip(files){
   w32(lv,18,data.length);
   w32(lv,22,data.length);
   w16(lv,26,name.length);
+
   local.set(name,30);
   localParts.push(local,data);
 
   const central=header(46+name.length);
   const cv=new DataView(central.buffer);
+
   w32(cv,0,0x02014b50);
   w16(cv,4,20);
   w16(cv,6,20);
@@ -247,68 +316,105 @@ function makeZip(files){
   w32(cv,24,data.length);
   w16(cv,28,name.length);
   w32(cv,42,offset);
+
   central.set(name,46);
   centralParts.push(central);
 
   offset+=local.length+data.length;
  }
 
- const centralSize=centralParts.reduce((sum,p)=>sum+p.length,0);
+ const centralSize=centralParts.reduce(
+  (sum,p)=>sum+p.length,0
+ );
+
  const end=header(22);
  const ev=new DataView(end.buffer);
+
  w32(ev,0,0x06054b50);
  w16(ev,8,files.length);
  w16(ev,10,files.length);
  w32(ev,12,centralSize);
  w32(ev,16,offset);
 
- return new Blob([...localParts,...centralParts,end],{type:"application/zip"});
+ return new Blob(
+  [...localParts,...centralParts,end],
+  {type:"application/zip"}
+ );
 }
 
 function downloadProject(){
+
  if(!generatedFiles.length){
   alert("पहले AI से प्रोजेक्ट बनवाएँ।");
   return;
  }
 
  try{
+
   const blob=makeZip(generatedFiles);
   const url=URL.createObjectURL(blob);
   const link=document.createElement("a");
+
   const name=($("appname").value.trim()||"AndroidProject")
    .replace(/[^a-zA-Z0-9_-]+/g,"_");
+
   link.href=url;
   link.download=name+".zip";
+
   document.body.appendChild(link);
   link.click();
   link.remove();
+
   setTimeout(()=>URL.revokeObjectURL(url),30000);
+
  }catch(error){
+
   alert("ZIP बनाने में समस्या: "+error.message);
  }
 }
 
 async function buildApk(){
+
  if(!generatedFiles.length){
   alert("पहले AI से ऐप बनवाएँ।");
   return;
  }
 
  const button=$("buildBtn");
+
  button.disabled=true;
  button.textContent="APK Build शुरू हो रहा है...";
+
  $("workflowLink").innerHTML="";
+ $("apkDownloadBtn").hidden=true;
+
+ if(pollTimer){
+  clearTimeout(pollTimer);
+  pollTimer=null;
+ }
+
+ currentBuildId="";
+ pollAttempts=0;
 
  try{
+
   const blob=makeZip(generatedFiles);
 
   if(blob.size>3*1024*1024)
    throw new Error("ZIP 3 MB से बड़ी है। अभी छोटी ZIP से कोशिश करें।");
 
   const base64=await new Promise((resolve,reject)=>{
+
    const reader=new FileReader();
-   reader.onload=()=>resolve(String(reader.result).split(",")[1]);
-   reader.onerror=()=>reject(new Error("ZIP पढ़ने में समस्या आई।"));
+
+   reader.onload=()=>{
+    resolve(String(reader.result).split(",")[1]);
+   };
+
+   reader.onerror=()=>{
+    reject(new Error("ZIP पढ़ने में समस्या आई।"));
+   };
+
    reader.readAsDataURL(blob);
   });
 
@@ -325,38 +431,148 @@ async function buildApk(){
 
   const data=await readResponse(response);
 
-  $("status").textContent="GitHub APK Build शुरू हो गया है!";
+  if(!data.buildId){
+   throw new Error("सर्वर ने Build ID नहीं भेजी।");
+  }
+
+  currentBuildId=data.buildId;
+
+  $("status").textContent="APK Build शुरू हो गया है। APK तैयार होने का इंतज़ार करें...";
   $("output").textContent=
    (data.message||"Build शुरू हुआ।")+
-   "\nZIP: "+(data.zipName||"");
+   "\nZIP: "+(data.zipName||"")+
+   "\nBuild ID: "+currentBuildId;
 
   if(data.workflowUrl){
+
    const link=document.createElement("a");
+
    link.href=data.workflowUrl;
    link.target="_blank";
    link.rel="noopener";
    link.textContent="GitHub पर Build का स्टेटस देखें";
+
    $("workflowLink").replaceChildren(link);
   }
 
+  pollAttempts=0;
+  checkBuildStatus();
+
  }catch(error){
+
   $("status").textContent="APK Build शुरू नहीं हो सका।";
   $("output").textContent=error.message;
+
  }finally{
+
   button.disabled=false;
   button.textContent="🚀 APK बनाएँ";
  }
 }
 
-async function copyResult(){
- const text=$("output").textContent;
+async function checkBuildStatus(){
+
+ if(!currentBuildId)return;
+
+ pollAttempts++;
+
+ $("status").textContent=
+  "APK तैयार हो रही है... कृपया प्रतीक्षा करें ("+
+  pollAttempts+" जाँच)";
+
  try{
+
+  const response=await fetch(
+   "/api/build-status?buildId="+encodeURIComponent(currentBuildId),
+   {cache:"no-store"}
+  );
+
+  const data=await readResponse(response);
+
+  if(data.status==="completed"){
+
+   $("status").textContent="🎉 आपकी APK तैयार है! अब डाउनलोड कर सकते हैं।";
+   $("resultTitle").textContent="APK सफलतापूर्वक तैयार";
+
+   $("output").textContent=
+    "APK नाम: "+(data.apkName||"Android-App.apk")+
+    "\nआकार: "+(data.size||"") +" bytes";
+
+   $("apkDownloadBtn").hidden=false;
+   $("buildBtn").disabled=false;
+
+   pollTimer=null;
+   return;
+  }
+
+  if(data.status==="failed"){
+
+   $("status").textContent="APK Build असफल हो गया।";
+   $("output").textContent=data.message||"Build में त्रुटि आई।";
+
+   pollTimer=null;
+   return;
+  }
+
+  if(pollAttempts>=180){
+
+   $("status").textContent=
+    "अभी APK तैयार नहीं हुई। आप GitHub पर Build का स्टेटस देख सकते हैं।";
+
+   pollTimer=null;
+   return;
+  }
+
+  pollTimer=setTimeout(checkBuildStatus,10000);
+
+ }catch(error){
+
+  $("status").textContent=
+   "Build की स्थिति जाँचने में समस्या आई: "+error.message;
+
+  if(pollAttempts<180){
+   pollTimer=setTimeout(checkBuildStatus,15000);
+  }else{
+   pollTimer=null;
+  }
+ }
+}
+
+function downloadApk(){
+
+ if(!currentBuildId){
+  alert("Build ID नहीं मिली।");
+  return;
+ }
+
+ const url="/api/download-apk?buildId="+
+  encodeURIComponent(currentBuildId);
+
+ const link=document.createElement("a");
+
+ link.href=url;
+ link.download="Android-App.apk";
+
+ document.body.appendChild(link);
+ link.click();
+ link.remove();
+}
+
+async function copyResult(){
+
+ const text=$("output").textContent;
+
+ try{
+
   await navigator.clipboard.writeText(text);
   alert("जवाब कॉपी हो गया!");
+
  }catch{
+
   alert("जवाब को चुनकर कॉपी करें।");
  }
 }
 </script>
+
 </body>
 </html>
