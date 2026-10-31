@@ -1,6 +1,10 @@
+
 {
   "name": "rk-ai-apk-builder",
   "version": "1.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@vercel/blob": "^2.0.0"
+  }
 }
