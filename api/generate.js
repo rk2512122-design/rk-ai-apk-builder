@@ -1,9 +1,9 @@
-
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
 
 const MAX_FILES = 80;
 const MAX_PROJECT_SIZE = 2 * 1024 * 1024;
+const DEFAULT_PACKAGE = "com.example.generatedapp";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -50,6 +50,12 @@ export default async function handler(req, res) {
   const safeAppType = String(appType).trim().slice(0, 150);
   const safeFeatures = String(features).trim().slice(0, 5000);
 
+  const packageName = getPackageName(
+    body.packageName,
+    safeAppName,
+    safeFeatures
+  );
+
   const prompt = `
 You are an expert Android Java developer.
 
@@ -64,10 +70,13 @@ ${safeAppType}
 USER REQUIREMENTS:
 ${safeFeatures}
 
+IMPORTANT PACKAGE NAME:
+${packageName}
+
 ANDROID REQUIREMENTS:
 
 1. Use Java only. Never use Kotlin.
-2. Package name: com.example.generatedapp.
+2. Use this exact package name: ${packageName}
 3. Android Gradle Plugin version 8.6.1.
 4. compileSdk 35.
 5. minSdk 24.
@@ -78,54 +87,58 @@ ANDROID REQUIREMENTS:
 10. Include app/build.gradle.
 11. Include gradle.properties.
 12. Include app/src/main/AndroidManifest.xml.
-13. Include app/src/main/java/com/example/generatedapp/MainActivity.java.
+13. Include app/src/main/java/${packageName.replace(/\./g, "/")}/MainActivity.java.
 14. Include every required layout and resource.
 15. Include a working launcher Activity.
 16. All referenced resources must exist.
 17. Never generate empty or placeholder files.
 18. Do not include incomplete Gradle wrapper files.
 19. Do not claim that the APK is already built.
+20. Both namespace and applicationId must be exactly ${packageName}.
+21. Every Java package declaration must match its directory.
+22. Do not use com.example.generatedapp or any other package name.
 
 JAVA RULES:
 
-20. Check every Java file for syntax errors.
-21. All braces and parentheses must be balanced.
-22. All methods must be inside the correct class.
-23. Never put statements outside methods.
-24. Every click listener must have valid Java syntax.
-25. Prefer standard anonymous listener classes.
-26. Never generate stray }); statements.
-27. Every import and referenced class must exist.
-28. Java package declarations must match file paths.
+23. Check every Java file for syntax errors.
+24. All braces and parentheses must be balanced.
+25. All methods must be inside the correct class.
+26. Never put statements outside methods.
+27. Every click listener must have valid Java syntax.
+28. Prefer standard anonymous listener classes.
+29. Never generate stray }); statements.
+30. Every import and referenced class must exist.
+31. Java package declarations must match file paths.
 
 RESOURCE RULES:
 
-29. Every referenced resource must exist.
-30. Resource filenames must use lowercase letters, numbers and underscores.
-31. Never reference a missing drawable, mipmap, string, color or style.
-32. Do not generate adaptive launcher icons.
-33. Create a valid drawable/ic_launcher.xml launcher icon.
-34. If no launcher icon is generated, omit icon references from the manifest.
-35. Never reference @mipmap/ic_launcher_foreground.
-36. Every XML file must be valid.
-37. Never generate empty android:id values.
-38. Use valid IDs such as @+id/main_button.
+32. Every referenced resource must exist.
+33. Resource filenames must use lowercase letters, numbers and underscores.
+34. Never reference a missing drawable, mipmap, string, color or style.
+35. Do not generate adaptive launcher icons.
+36. Create a valid drawable/ic_launcher.xml launcher icon.
+37. If no launcher icon is generated, omit icon references from the manifest.
+38. Never reference @mipmap/ic_launcher_foreground.
+39. Every XML file must be valid.
+40. Never generate empty android:id values.
+41. Use valid IDs such as @+id/main_button.
 
 GRADLE RULES:
 
-39. Use plugins DSL.
-40. Root build.gradle must contain:
+42. Use plugins DSL.
+43. Root build.gradle must contain:
     id 'com.android.application' version '8.6.1' apply false
-41. settings.gradle must contain pluginManagement.
-42. Include google(), mavenCentral() and gradlePluginPortal() in pluginManagement.
-43. Include dependencyResolutionManagement.
-44. Use RepositoriesMode.FAIL_ON_PROJECT_REPOS.
-45. Keep dependency repositories only in settings.gradle.
-46. Never use allprojects repositories.
-47. Never use project-level repositories.
-48. Do not use old buildscript configuration.
-49. app/build.gradle must contain namespace and applicationId.
-50. gradle.properties must contain:
+44. settings.gradle must contain pluginManagement.
+45. Include google(), mavenCentral() and gradlePluginPortal() in pluginManagement.
+46. Include dependencyResolutionManagement.
+47. Use RepositoriesMode.FAIL_ON_PROJECT_REPOS.
+48. Keep dependency repositories only in settings.gradle.
+49. Never use allprojects repositories.
+50. Never use project-level repositories.
+51. Do not use old buildscript configuration.
+52. app/build.gradle must contain namespace '${packageName}'.
+53. app/build.gradle must contain applicationId '${packageName}'.
+54. gradle.properties must contain:
     android.useAndroidX=true
     android.enableJetifier=true
     org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
@@ -156,12 +169,17 @@ Every path must be relative to the project root.
 
   if (!result.ok) {
     return res.status(502).json({
-      error: result.error,
+      error: result.error || "Gemini generation failed.",
       details: result.details
     });
   }
 
-  return validateProject(result.data, res, safeAppName);
+  return validateProject(
+    result.data,
+    res,
+    safeAppName,
+    packageName
+  );
 }
 
 
@@ -229,6 +247,8 @@ async function handleRepair(req, res, apiKey, body) {
     });
   }
 
+  const appPackage = getPackageFromGradle(files) || DEFAULT_PACKAGE;
+
   const prompt = `
 You are an expert Android Java and Gradle repair engineer.
 
@@ -240,23 +260,29 @@ ${body.buildError.slice(-12000)}
 EXISTING PROJECT FILES:
 ${JSON.stringify(files)}
 
+IMPORTANT:
+The existing Android package name is exactly:
+${appPackage}
+
 RULES:
 1. Fix the actual build errors.
 2. Preserve the original app purpose and features.
 3. Use Java only.
-4. Keep package name com.example.generatedapp.
-5. Keep Android Gradle Plugin 8.6.1.
-6. Keep compileSdk 35, minSdk 24 and targetSdk 35.
-7. Fix Java syntax errors and missing imports.
-8. Fix invalid Android XML and missing resources.
-9. Fix manifest references.
-10. Fix Gradle configuration only when necessary.
-11. Do not add unnecessary dependencies.
-12. Do not remove working app features to hide errors.
-13. Return complete contents of every changed file.
-14. Include new files only when required.
-15. Do not return unchanged files.
-16. If you cannot safely repair the project, return an empty files array.
+4. Keep the exact existing package name ${appPackage}.
+5. Keep namespace and applicationId equal to ${appPackage}.
+6. Keep Android Gradle Plugin 8.6.1.
+7. Keep compileSdk 35, minSdk 24 and targetSdk 35.
+8. Fix Java syntax errors and missing imports.
+9. Fix invalid Android XML and missing resources.
+10. Fix manifest references.
+11. Fix Gradle configuration only when necessary.
+12. Do not add unnecessary dependencies.
+13. Do not remove working app features to hide errors.
+14. Return complete contents of every changed file.
+15. Include new files only when required.
+16. Do not return unchanged files.
+17. If you cannot safely repair the project, return an empty files array.
+18. Never change the package name.
 
 RETURN ONLY JSON:
 {
@@ -323,18 +349,22 @@ No Markdown fences or extra text.
     }
 
     repairedPaths.add(path);
+    repaired.push({ path, content: file.content });
+  }
 
-    if (
-      path.endsWith(".java") &&
-      !checkJavaBraces(file.content)
-    ) {
+  normalizeJavaFiles(repaired, appPackage);
+  normalizePackageReferences(repaired, appPackage);
+  normalizeGradlePackage(repaired, appPackage);
+
+  for (const file of repaired.filter(
+    item => item.path.endsWith(".java")
+  )) {
+    if (!checkJavaBraces(file.content)) {
       return res.status(422).json({
         error: "AI returned Java with unbalanced braces.",
-        details: path
+        details: file.path
       });
     }
-
-    repaired.push({ path, content: file.content });
   }
 
   const repairedSize = repaired.reduce(
@@ -508,7 +538,7 @@ function parseJson(output) {
 }
 
 
-function validateProject(project, res, appName) {
+function validateProject(project, res, appName, packageName) {
   if (
     !project ||
     !Array.isArray(project.files) ||
@@ -579,15 +609,20 @@ function validateProject(project, res, appName) {
     files.push({ path, content });
   }
 
+  normalizeJavaFiles(files, packageName);
+  normalizePackageReferences(files, packageName);
+  normalizeGradlePackage(files, packageName);
+
   const required = [
     "settings.gradle",
     "build.gradle",
     "app/build.gradle",
     "app/src/main/AndroidManifest.xml",
-    "app/src/main/java/com/example/generatedapp/MainActivity.java"
+    `app/src/main/java/${packageName.replace(/\./g, "/")}/MainActivity.java`
   ];
 
-  const missing = required.filter(path => !seen.has(path));
+  const paths = new Set(files.map(file => file.path));
+  const missing = required.filter(path => !paths.has(path));
 
   if (missing.length) {
     return res.status(422).json({
@@ -601,13 +636,13 @@ function validateProject(project, res, appName) {
   const mainActivity = files.find(
     file =>
       file.path ===
-      "app/src/main/java/com/example/generatedapp/MainActivity.java"
+      `app/src/main/java/${packageName.replace(/\./g, "/")}/MainActivity.java`
   );
 
   if (
-    !/package\s+com\.example\.generatedapp\s*;/.test(
-      mainActivity.content
-    )
+    !new RegExp(
+      `package\\\\s+${escapeRegex(packageName)}\\\\s*;`
+    ).test(mainActivity.content)
   ) {
     return res.status(422).json({
       error: "MainActivity package declaration is incorrect."
@@ -669,6 +704,24 @@ function validateProject(project, res, appName) {
     });
   }
 
+  if (
+    !app.includes(`namespace '${packageName}'`) &&
+    !app.includes(`namespace "${packageName}"`)
+  ) {
+    return res.status(422).json({
+      error: "App namespace does not match the unique package name."
+    });
+  }
+
+  if (
+    !app.includes(`applicationId '${packageName}'`) &&
+    !app.includes(`applicationId "${packageName}"`)
+  ) {
+    return res.status(422).json({
+      error: "Application ID does not match the unique package name."
+    });
+  }
+
   const totalSize = files.reduce(
     (sum, file) =>
       sum + Buffer.byteLength(file.content, "utf8"),
@@ -684,10 +737,181 @@ function validateProject(project, res, appName) {
   return res.status(200).json({
     status: "completed",
     projectName: project.projectName || appName,
+    packageName,
     fileCount: files.length,
     files,
     message: "Android project generated and validated."
   });
+}
+
+
+function getPackageName(requestedPackage, appName, features) {
+  const explicit = String(requestedPackage || "").trim();
+
+  const featureMatch = String(features || "").match(
+    /(?:package\s*name|application\s*id)\s*:\s*([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+)/i
+  );
+
+  let candidate = explicit || featureMatch?.[1] || "";
+
+  if (candidate && isValidPackage(candidate)) {
+    return candidate;
+  }
+
+  const slug = String(appName || "myapp")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 35) || "myapp";
+
+  return `com.rkai.${slug}`;
+}
+
+
+function isValidPackage(value) {
+  return (
+    typeof value === "string" &&
+    value.length <= 200 &&
+    /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(value)
+  );
+}
+
+
+function normalizeJavaFiles(files, packageName) {
+  const javaFiles = files.filter(file =>
+    file.path.startsWith("app/src/main/java/") &&
+    file.path.endsWith(".java")
+  );
+
+  const normalized = [];
+  const otherFiles = files.filter(file =>
+    !(
+      file.path.startsWith("app/src/main/java/") &&
+      file.path.endsWith(".java")
+    )
+  );
+
+  const seen = new Set();
+
+  for (const file of javaFiles) {
+    let content = file.content;
+
+    const match = content.match(
+      /^\s*package\s+([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*)\s*;/m
+    );
+
+    let suffix = "";
+
+    if (match) {
+      const oldPackage = match[1];
+
+      if (oldPackage === DEFAULT_PACKAGE) {
+        suffix = "";
+      } else if (oldPackage.startsWith(DEFAULT_PACKAGE + ".")) {
+        suffix = oldPackage.slice(DEFAULT_PACKAGE.length);
+      } else if (oldPackage.startsWith(packageName + ".")) {
+        suffix = oldPackage.slice(packageName.length);
+      }
+    }
+
+    const newPackage = packageName + suffix;
+
+    if (match) {
+      content = content.replace(
+        /^\s*package\s+[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*\s*;/m,
+        `package ${newPackage};`
+      );
+    } else {
+      content = `package ${newPackage};\n\n${content}`;
+    }
+
+    content = content.replaceAll(
+      DEFAULT_PACKAGE,
+      packageName
+    );
+
+    const relativePackagePath = newPackage.replace(/\./g, "/");
+    const filename = file.path.split("/").pop();
+    const newPath =
+      `app/src/main/java/${relativePackagePath}/${filename}`;
+
+    if (seen.has(newPath)) {
+      continue;
+    }
+
+    seen.add(newPath);
+    normalized.push({ path: newPath, content });
+  }
+
+  files.splice(
+    0,
+    files.length,
+    ...otherFiles,
+    ...normalized
+  );
+}
+
+
+function normalizePackageReferences(files, packageName) {
+  for (const file of files) {
+    if (
+      file.path.endsWith(".java") ||
+      file.path.endsWith(".xml") ||
+      file.path.endsWith(".gradle") ||
+      file.path.endsWith(".properties")
+    ) {
+      file.content = file.content.replaceAll(
+        DEFAULT_PACKAGE,
+        packageName
+      );
+    }
+  }
+}
+
+
+function normalizeGradlePackage(files, packageName) {
+  const file = files.find(
+    item => item.path === "app/build.gradle"
+  );
+
+  if (!file) return;
+
+  let content = file.content;
+
+  if (/namespace\s+['"][^'"]+['"]/.test(content)) {
+    content = content.replace(
+      /namespace\s+['"][^'"]+['"]/,
+      `namespace '${packageName}'`
+    );
+  }
+
+  if (/applicationId\s+['"][^'"]+['"]/.test(content)) {
+    content = content.replace(
+      /applicationId\s+['"][^'"]+['"]/,
+      `applicationId '${packageName}'`
+    );
+  }
+
+  file.content = content;
+}
+
+
+function getPackageFromGradle(files) {
+  const app = getContent(files, "app/build.gradle");
+
+  const match = app.match(
+    /applicationId\s+['"]([^'"]+)['"]/
+  );
+
+  if (match && isValidPackage(match[1])) {
+    return match[1];
+  }
+
+  return null;
+}
+
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 
