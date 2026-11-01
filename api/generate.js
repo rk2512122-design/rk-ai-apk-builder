@@ -1,3 +1,4 @@
+
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
 
@@ -639,9 +640,10 @@ function validateProject(project, res, appName, packageName) {
       `app/src/main/java/${packageName.replace(/\./g, "/")}/MainActivity.java`
   );
 
+  // FIXED: Correct Java package declaration validation.
   if (
     !new RegExp(
-      `package\\\\s+${escapeRegex(packageName)}\\\\s*;`
+      `package\\s+${escapeRegex(packageName)}\\s*;`
     ).test(mainActivity.content)
   ) {
     return res.status(422).json({
