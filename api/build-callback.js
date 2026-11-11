@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   const { buildId, status, message } = req.body || {};
   if (
     typeof buildId !== "string" ||
-    !/^[A-Za-z0-9_-]+-[0-9]+\\.zip$/.test(buildId)
+    !/^[A-Za-z0-9_-]+-[0-9]+\.zip$/.test(buildId)
   ) {
     return res.status(400).json({ error: "A valid buildId is required." });
   }
