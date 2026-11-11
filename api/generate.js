@@ -35,7 +35,8 @@ export default async function handler(req, res) {
   const rawFeatures = String(body.features || idea || "").trim();
   const inferredName = deriveAppName(idea || rawFeatures);
   const inferredType = inferAppType(idea || rawFeatures);
-  const appName = String(body.appName || inferredName).trim();
+  const isRkSmartAssistant = /rk\s*ai\s*smart\s*assistant|rksmartassistant/i.test(String(body.appName || "") + " " + idea + " " + rawFeatures);
+  const appName = isRkSmartAssistant ? "RK AI Smart Assistant 2026" : String(body.appName || inferredName).trim();
   const appType = String(body.appType || inferredType).trim();
   const features = rawFeatures;
 
@@ -52,13 +53,11 @@ export default async function handler(req, res) {
   // Keep package identity deterministic for the same app name across generations.
   // Different app names receive different package names; later builds of the same
   // app must keep the same appName to remain update-compatible.
-  const packageName = getPackageName(
-    body.packageName,
-    safeAppName,
-    safeFeatures
-  );
+  const packageName = isRkSmartAssistant
+    ? "com.rkai.rksmartassistant"
+    : getPackageName(body.packageName, safeAppName, safeFeatures);
 
-  const isChatApp = /chatbot|chat bot|ai chat|chat app|messaging/i.test(safeAppName + " " + safeAppType + " " + safeFeatures);
+  const isChatApp = /chatbot|chat bot|ai chat|chat app|messaging|smart assistant|ai assistant|चैट|बातचीत/i.test(safeAppName + " " + safeAppType + " " + safeFeatures);
   const chatInstructions = isChatApp ? `
 
  SPECIAL AI CHATBOT INTEGRATION — MANDATORY:
@@ -105,6 +104,18 @@ ${safeAppType}
 
 USER REQUIREMENTS (THE USER'S NATURAL-LANGUAGE APP IDEA):
 ${safeFeatures}
+
+RK AI SMART ASSISTANT PROJECT LOCK — APPLY WHEN THIS IS THE RK AI SMART ASSISTANT:
+- The exact package is com.rkai.rksmartassistant. Do not invent, shorten, or replace it with another package.
+- Return a complete app, not a sample screen. At least 15 meaningful files are expected for this app.
+- MainActivity must implement real POST requests to https://rk-ai-apk-builder.vercel.app/api/chat and https://rk-ai-apk-builder.vercel.app/api/image.
+- Image mode must decode imageBase64 from the image endpoint and display the returned Bitmap. Do not merely write an image prompt.
+- Implement multiple locally persisted conversations (SQLite or SharedPreferences JSON), each with a stable ID, title, timestamps and ordered messages. History must list, open, continue and delete individual conversations.
+- New Chat must create a new conversation without deleting previous chats. Clear Chat must clear only the active conversation after confirmation.
+- The keyboard must leave the composer and typed text visible. Use adjustResize and a bottom-pinned composer.
+- Include separate Java classes/resources as needed; do not compress the whole app into one trivial MainActivity.
+- Required implementation evidence: Java source must contain both API endpoint paths, persistent storage code, and actual history selection/deletion handlers.
+- Include required layouts, values, drawables, manifest, Gradle files and all referenced resources. No missing resources or placeholder controls.
 
 UNIVERSAL IDEA-TO-APP RULES — APPLY TO EVERY APP CATEGORY:
 1. Treat the user's idea as the product brief. Infer the app's purpose, target users, main user journey, screens, navigation, data model, and sensible supporting features without requiring the user to provide technical specifications.
@@ -683,6 +694,25 @@ function validateProject(project, res, appName, packageName) {
   }
 
   ensureGradleProperties(files);
+
+  const isRkSmartAssistant = packageName === "com.rkai.rksmartassistant";
+  if (isRkSmartAssistant) {
+    const javaSource = files.filter(file => file.path.endsWith(".java")).map(file => file.content).join("\n");
+    const allSource = files.map(file => file.content).join("\n");
+    const missingFeatures = [];
+    if (!allSource.includes("https://rk-ai-apk-builder.vercel.app/api/chat")) missingFeatures.push("real AI chat endpoint integration");
+    if (!allSource.includes("https://rk-ai-apk-builder.vercel.app/api/image")) missingFeatures.push("real image-generation endpoint integration");
+    if (!/SharedPreferences|SQLiteDatabase|RoomDatabase/.test(javaSource)) missingFeatures.push("persistent local chat-history storage");
+    if (!/history/i.test(javaSource) || !/delete/i.test(javaSource)) missingFeatures.push("chat-history open/delete actions");
+    if (files.length < 15) missingFeatures.push("complete project files (at least 15 meaningful files)");
+    if (missingFeatures.length) {
+      return res.status(422).json({
+        error: "Generated RK AI Smart Assistant project is incomplete. It was blocked before download.",
+        missingFeatures,
+        packageName
+      });
+    }
+  }
 
   const mainActivity = files.find(
     file =>
