@@ -776,11 +776,11 @@ include(":app")
   }
 
   for (const file of files.filter(item => item.path.endsWith(".java"))) {
-    const declaredPackage = file.content.match(/^\\s*package\\s+([a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*)*)\\s*;/m);
+    const declaredPackage = file.content.match(/^\s*package\s+([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*)\s*;/m);
     const expectedDirectory = file.path
-      .replace(/^app\\/src\\/main\\/java\\//, "")
-      .replace(/\\/[^/]+\\.java$/, "")
-      .replace(/\\//g, ".");
+      .replace(/^app\/src\/main\/java\//, "")
+      .replace(/\/[^/]+\.java$/, "")
+      .replace(/\//g, ".");
     if (!declaredPackage || declaredPackage[1] !== expectedDirectory) {
       return res.status(422).json({
         error: "Java package declaration does not match its source directory.",
