@@ -70,6 +70,18 @@ export default async function handler(req, res) {
  16. Ensure persistence survives navigating Back, force-closing the app and reopening the app, and device restart. Do not claim cloud sync; this is local device storage.
  17. Handle malformed or empty saved JSON safely by starting with an empty conversation without crashing.
  18. When sending history to the backend, use the currently active conversation in chronological order and do not send messages from a different chat.
+ 19. MULTIPLE SAVED CONVERSATIONS ARE REQUIRED, similar to a chat-history sidebar in a modern AI chat app. Do not implement only one global message list.
+ 20. Store a collection of conversations locally. Each conversation must have a unique stable ID, a title, created/updated timestamps, and its own ordered list of user/assistant messages. Use SQLite/Room or a robust SharedPreferences JSON structure.
+ 21. Add an accessible Chat History entry point in the app toolbar (for example, a menu button) that opens a navigation drawer or history screen listing saved conversations, newest updated first. Each row should show a short title derived from the first user message and a useful date/time if space allows.
+ 22. Tapping a history row must open that exact conversation and render its messages in chronological order. The user must be able to continue that conversation; save each new message to that conversation's ID.
+ 23. New Chat must create a new, separate empty conversation and make it active. It must not overwrite, merge with, or delete any previous conversation.
+ 24. On a fresh app launch, show a clean new-chat screen by default, while keeping all previous conversations accessible from Chat History. Do not automatically reopen the last conversation on the main screen.
+ 25. Provide a way to delete an individual conversation from the history list with a confirmation dialog. Clear Chat should clearly explain whether it clears only the active conversation; do not silently delete all saved conversations.
+ 26. Persist conversation titles and timestamps and update the title from the first meaningful user message. Handle long titles safely with ellipsizing.
+ 27. Keep the active conversation ID and selected history item consistent through screen rotation, app pause/resume, process death and app restart.
+ 28. If no conversations exist, show a helpful empty history state. If saved data is malformed, recover safely without crashing or destroying other valid conversations.
+ 29. Add clear navigation between the chat screen and history screen/drawer, with a back action returning to the current chat. The history UI must be usable on small Android phones.
+ 30. Do not claim cloud sync or account-based sync; all history is local to this device unless a real secure sync backend is implemented.
 ` : "";
   const prompt = `
 You are a senior Android product designer and expert Android Java engineer.
