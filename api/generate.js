@@ -706,6 +706,29 @@ function validateProject(project, res, appName, packageName) {
 
   ensureGradleProperties(files);
 
+  // Normalize settings.gradle instead of rejecting valid-but-differently-formatted
+  // Gemini output. This guarantees the repository policy and plugin repositories.
+  const settingsFile = files.find(file => file.path === "settings.gradle");
+  settingsFile.content = `pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "RKGeneratedApp"
+include(":app")
+`;
+
   const isRkSmartAssistant = packageName === "com.rkai.rksmartassistant";
   if (isRkSmartAssistant) {
     const javaSource = files.filter(file => file.path.endsWith(".java")).map(file => file.content).join("\n");
