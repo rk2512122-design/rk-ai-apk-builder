@@ -16,11 +16,11 @@ export default async function handler(req, res) {
   }
 
   const buildId = req.query?.buildId;
-  if (typeof buildId !== "string" || !/^[A-Za-z0-9_-]+-[0-9]+\\.zip$/.test(buildId)) {
+  if (typeof buildId !== "string" || !/^[A-Za-z0-9_-]+-[0-9]+\.zip$/.test(buildId)) {
     return res.status(400).json({ error: "A valid buildId is required." });
   }
 
-  const apkName = buildId.replace(/\\.zip$/i, ".apk");
+  const apkName = buildId.replace(/\.zip$/i, ".apk");
 
   try {
     // Prefer the workflow's explicit status record so failed builds do not poll forever.
