@@ -185,6 +185,8 @@ APK बनाने के लिए GitHub Build System का उपयोग 
 <script>
 
 let generatedFiles=[];
+let generatedPackageName="";
+let generatedAppName="";
 let generatedText="";
 let currentBuildId="";
 let pollTimer=null;
@@ -341,6 +343,9 @@ async function generateApp(){
    throw new Error("AI प्रोजेक्ट पूरा नहीं हुआ।");
 
   generatedFiles=validateFiles(data.files);
+  generatedPackageName=String(data.packageName||"").trim();
+  generatedAppName=String(data.projectName||"").trim();
+  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName)) throw new Error("प्रोजेक्ट का स्थायी Package Name नहीं मिला।");
   generatedText=JSON.stringify(data,null,2);
 
   $("resultTitle").textContent="Android प्रोजेक्ट तैयार है";
@@ -554,7 +559,8 @@ async function buildApk(){
    method:"POST",
    headers:{"Content-Type":"application/json"},
    body:JSON.stringify({
-    appName:(($("idea").value.trim().split(/[.!?\\n]/)[0]||"AndroidProject").slice(0,40)),
+    appName:(generatedAppName||(($("idea").value.trim().split(/[.!?\\n]/)[0]||"AndroidProject").slice(0,40))),
+    packageName:generatedPackageName,
     zipBase64:base64
    })
   });
