@@ -115,12 +115,6 @@ a{
 ZIP डाउनलोड करें या APK Build शुरू करें।
 </p>
 
-<label for="existingAppSelect">पहले से बना ऐप अपडेट करें (वैकल्पिक)</label>
-<select id="existingAppSelect">
- <option value="">नया ऐप बनाना है</option>
-</select>
-<p class="note" id="identityHint">पुराने ऐप को चुनने पर उसका package name अपने आप इस्तेमाल होगा।</p>
-
 <label for="idea">आपका ऐप आइडिया</label>
 
 <textarea
@@ -193,7 +187,6 @@ APK बनाने के लिए GitHub Build System का उपयोग 
 let generatedFiles=[];
 let generatedPackageName="";
 let generatedAppName="";
-let selectedAppIdentity=null;
 let generatedText="";
 let currentBuildId="";
 let pollTimer=null;
@@ -370,7 +363,7 @@ async function generateApp(){
   const response=await fetch("/api/generate",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({ idea, ...(selectedAppIdentity ? { appName:selectedAppIdentity.appName, packageName:selectedAppIdentity.packageName } : {}) })
+   body:JSON.stringify({ idea })
   });
 
   const data=await readResponse(response);
