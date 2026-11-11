@@ -211,10 +211,19 @@ async function readResponse(response){
 
  if(!response.ok){
 
+  const extra = [
+   ...(Array.isArray(data.missingFiles) && data.missingFiles.length
+     ? ["Missing files: " + data.missingFiles.join(", ")] : []),
+   ...(Array.isArray(data.missingFeatures) && data.missingFeatures.length
+     ? ["Missing features: " + data.missingFeatures.join(", ")] : []),
+   data.hint
+  ].filter(Boolean);
+
   const message=[
    data.error,
    data.details,
-   data.message
+   data.message,
+   ...extra
   ].filter(Boolean).join(" — ");
 
   throw new Error(
