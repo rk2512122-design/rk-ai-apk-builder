@@ -425,6 +425,9 @@ No Markdown fences or extra text.
 async function callGemini(apiKey, prompt) {
   const retryable = [429, 500, 502, 503, 504];
 
+  let currentPrompt = prompt;
+  let lastDetails = "Unknown Gemini generation error.";
+
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const response = await fetch(GEMINI_URL, {
@@ -437,16 +440,17 @@ async function callGemini(apiKey, prompt) {
           contents: [
             {
               role: "user",
-              parts: [{ text: prompt }]
+              parts: [{ text: currentPrompt }]
             }
           ],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 16384,
+            // Allow larger Android projects to fit in a single structured response.
+            maxOutputTokens: 32768,
             responseMimeType: "application/json"
           }
         }),
-        signal: AbortSignal.timeout(60000)
+        signal: AbortSignal.timeout(120000)
       });
 
       const data = await response.json();
@@ -482,21 +486,32 @@ async function callGemini(apiKey, prompt) {
       }
 
       if (candidate?.finishReason === "MAX_TOKENS") {
-        return {
-          ok: false,
-          details: "Gemini output reached its token limit."
-        };
+        lastDetails = "Gemini output reached its token limit.";
+      } else {
+        const parsed = parseJson(output);
+        if (parsed) return { ok: true, data: parsed };
+        lastDetails = "Gemini response was incomplete or not valid JSON.";
       }
 
-      const parsed = parseJson(output);
-      if (!parsed) {
-        return {
-          ok: false,
-          details: "Gemini response was not valid complete JSON."
-        };
-      }
+      // A structured response can still be cut off for a large project.
+      // Retry once with an explicit compact-output instruction instead of
+      // immediately failing and asking the user to rewrite the same idea.
+      if (attempt < 3) {
+        currentPrompt = prompt + `
 
-      return { ok: true, data: parsed };
+RETRY OUTPUT RULES:
+- Your previous attempt did not produce complete valid JSON.
+- Return one complete, syntactically valid JSON object only.
+- Keep the project within 25-30 essential files where practical.
+- Keep Java and XML concise; do not add comments, explanations, sample data, or unnecessary decorative assets.
+- Prioritize the user's requested core features and required Android/Gradle files.
+- Do not omit required files, truncate file contents, or use placeholders.
+- Ensure the final JSON closes every string, array, and object.
+`;
+        await wait(attempt * 1500);
+        continue;
+      }
+      return { ok: false, details: lastDetails };
     } catch (error) {
       if (attempt < 3) {
         await wait(attempt * 2000);
@@ -506,7 +521,7 @@ async function callGemini(apiKey, prompt) {
     }
   }
 
-  return { ok: false, details: "All Gemini attempts failed." };
+  return { ok: false, details: lastDetails || "All Gemini attempts failed." };
 }
 
 
