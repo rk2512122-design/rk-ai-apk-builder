@@ -62,6 +62,14 @@ export default async function handler(req, res) {
  8. Send recent conversation history in chronological order; use role "user" for user messages and "assistant" for assistant replies.
  9. Never use simulated or hard-coded AI replies. Every assistant answer must come from the backend.
  10. The welcome greeting may be local but must not be presented as an AI-generated answer.
+ 11. CHAT HISTORY PERSISTENCE IS REQUIRED: save every successfully displayed user message and assistant reply locally on the Android device using SharedPreferences (JSON) or SQLite. Do not rely only on in-memory ArrayList data.
+ 12. On every app launch, load the saved conversation before showing the chat screen, then render the messages in their original chronological order. If there is no saved conversation, show the welcome greeting.
+ 13. Save the updated history immediately after each user message and after each successful assistant reply. Also save when the app is paused or closed as a safety measure.
+ 14. Store both message role (user/assistant) and full text. Do not save loading indicators, temporary errors or the welcome greeting as conversation history.
+ 15. The New Chat action must start a fresh visible conversation without deleting the previous conversation unless the user explicitly chooses Clear Chat. The Clear Chat action must ask for confirmation, then clear the saved conversation as well as the screen.
+ 16. Ensure persistence survives navigating Back, force-closing the app and reopening the app, and device restart. Do not claim cloud sync; this is local device storage.
+ 17. Handle malformed or empty saved JSON safely by starting with an empty conversation without crashing.
+ 18. When sending history to the backend, use the currently active conversation in chronological order and do not send messages from a different chat.
 ` : "";
   const prompt = `
 You are a senior Android product designer and expert Android Java engineer.
