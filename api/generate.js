@@ -110,7 +110,15 @@ UNIVERSAL IDEA-TO-APP RULES — APPLY TO EVERY APP CATEGORY:
 7. For features needing internet, add secure backend integration only when a real configured endpoint exists. Never put API keys, passwords, tokens, or private secrets in the APK.
 8. Never fake online services, AI, image generation, payments, maps, login, cloud sync, messaging, or live data. If a real provider or backend is not configured, do not claim that feature works; provide a clear unavailable/configuration state rather than simulated results.
 9. For AI chat, image generation, speech, or other AI features, use a secure server endpoint and parse its real response. Keep secrets on the server. If no suitable endpoint exists, state this limitation clearly in the generated app rather than inventing successful results.
-   For image generation, do not merely switch the input hint or show an "Image Generation Mode ON" toast. Implement a complete real image-generation request/response flow only if a configured image-generation backend exists: send the user's prompt, show progress, display the returned image, and provide save/share/retry actions. If the backend is not available, clearly mark image generation as unavailable and do not pretend an image was generated.
+   IMAGE GENERATION — REQUIRED REAL IMPLEMENTATION:
+   a. A secure server endpoint is configured at https://rk-ai-apk-builder.vercel.app/api/image. The Android app must POST JSON {"prompt":"the user's image description"} with Content-Type application/json. Never put GEMINI_API_KEY in the APK.
+   b. Parse JSON response fields status, mimeType, imageBase64, and text. On status 200 and a valid imageBase64, decode Base64 into a Bitmap and show the actual generated image in the conversation.
+   c. Use background-thread networking (ExecutorService or equivalent), connection/read timeouts, and update the UI on the main thread. Show progress while generating and disable duplicate sends.
+   d. Provide save-to-gallery using MediaStore on supported Android versions, plus share and retry actions. Request only permissions actually required; do not request broad storage access on modern Android.
+   e. If the server returns an error, times out, or returns no image, show the real error with a retry action. Never substitute a text prompt or fake image and never show success unless image bytes were received and decoded.
+   f. The camera/image mode button must visibly switch the composer into image-description mode and the Send button must call /api/image. Switching back must restore chat mode and call /api/chat.
+   g. Add INTERNET permission and verify that image mode works on mobile data as well as Wi-Fi.
+   h. If the provider/model is unavailable or rejects the request, display a clear unavailable message; do not silently fall back to text-only chat.
 10. Add input validation, loading and error states, retry actions, and helpful feedback for network-dependent features.
 11. Do not create unnecessary features unrelated to the user's idea. Keep the app focused, polished, and easy for a non-technical user.
 12. Before returning files, verify that the requested primary user journey can be completed using the generated screens and controls, and that referenced resources, permissions, and dependencies are present.
