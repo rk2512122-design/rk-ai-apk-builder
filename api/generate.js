@@ -145,6 +145,16 @@ EXACT ANDROID PACKAGE:
 ${packageName}
 
 PRODUCT DESIGN AND USER EXPERIENCE:
+APP LAYOUT SAFETY — STRICT, APPLY TO EVERY GENERATED APP:
+- The app content must never draw underneath the Android status bar or navigation bar. Prefer a non-edge-to-edge content layout unless WindowInsets are explicitly implemented correctly. Do not combine edge-to-edge flags with guessed padding.
+- For a standard Activity using a status bar, keep the app toolbar below the status bar. If using edge-to-edge, apply WindowInsets.Type.statusBars() and navigationBars() to the root view exactly once.
+- Keep bottom actions above the navigation/gesture bar. Apply bottom system-bar inset to the root or scrolling content, not by placing controls at the screen edge.
+- Never use absolute screen coordinates or hard-coded full-screen heights for primary controls.
+- Every button must have visible, high-contrast text or a clearly recognizable icon with contentDescription. Never use a blank button, blank text, or text color matching its background.
+- For note cards and similar list items, place the title and body in a vertical content area, then place clearly labelled actions in a separate horizontal row. Use visible labels such as "EDIT" and "DELETE"; do not leave an empty edit button. Give actions balanced widths, 48dp minimum height, spacing of at least 8dp, and enough width for their labels. On narrow screens allow the actions to wrap/stack rather than overlap or clip.
+- Keep the app title toolbar height and padding consistent. Do not allow status bar icons/time to overlap the app title.
+- Before returning the project, inspect every screen for clipped text, overlapping controls, blank buttons, unreadable contrast, and controls obscured by system bars.
+- For a notes app specifically: place a clear title at top; show an empty-state message centered only in the available content area; anchor the Create New Note button above the navigation bar with bottom inset; each note card must show both Edit and Delete labels clearly.
 1. Design a premium, modern Android app that looks like a professionally published app.
 2. Use a consistent design system: coordinated colors, typography, spacing, corner radii, icons and component styles.
 3. Choose a visual style appropriate to the app category. Do not blindly use the same dashboard design for every app.
