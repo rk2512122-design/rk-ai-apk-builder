@@ -50,15 +50,14 @@ async function loadApps(){
    card.append(title,pkg,meta);$("apps").append(card);
   }
   $("status").textContent="कुल "+data.apps.length+" ऐप मिले।";
- }catch(e){$("status").textContent=e.message;}
+  return true;
+ }catch(e){$("status").textContent=e.message;return false;}
 }
 $("loginBtn").onclick=async()=>{
  adminPassword=$("password").value;
  if(!adminPassword){$("status").textContent="Admin Password डालें।";return;}
- await loadApps();
- if(!$("status").textContent.includes("गलत")&&!$("status").textContent.includes("नहीं")&&!$("status").textContent.includes("not configured")&&!$("status").textContent.includes("नहीं मिला")){
-  $("login").classList.add("hidden");$("dashboard").classList.remove("hidden");
- }
+ const ok=await loadApps();
+ if(ok){$("login").classList.add("hidden");$("dashboard").classList.remove("hidden");}
 };
 $("refreshBtn").onclick=loadApps;
 $("logoutBtn").onclick=()=>{
