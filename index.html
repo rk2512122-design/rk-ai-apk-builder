@@ -195,35 +195,6 @@ let pollAttempts=0;
 const $=id=>document.getElementById(id);
 
 
-// Load registered apps from the private build repository through the server.
-async function loadRegisteredApps(){
- try{
-  const response=await fetch("/api/apps",{cache:"no-store"});
-  const data=await readResponse(response);
-  const select=$("existingAppSelect");
-  for(const app of (data.apps||[])){
-   const option=document.createElement("option");
-   option.value=app.packageName;
-   option.textContent=app.appName+" ("+app.packageName+")";
-   option.dataset.appName=app.appName;
-   select.appendChild(option);
-  }
- }catch(error){
-  $("identityHint").textContent="पुराने ऐप की सूची अभी लोड नहीं हुई। नया ऐप बनाने में कोई समस्या नहीं है।";
- }
-}
-$("existingAppSelect").addEventListener("change",function(){
- const option=this.options[this.selectedIndex];
- selectedAppIdentity=this.value ? {
-  packageName:this.value,
-  appName:option.dataset.appName||option.textContent
- } : null;
- $("identityHint").textContent=selectedAppIdentity
-  ? "अपडेट मोड: "+selectedAppIdentity.appName+" — "+selectedAppIdentity.packageName
-  : "नया ऐप बनाना है।";
-});
-loadRegisteredApps();
-
 // Improved API response reader
 async function readResponse(response){
 
