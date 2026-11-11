@@ -15,7 +15,15 @@ export default async function handler(req, res) {
     });
   }
 
-  const { appName, zipBase64 } = req.body || {};
+  const { appName, packageName, zipBase64 } = req.body || {};
+
+  if (
+    typeof packageName !== "string" ||
+    !/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(packageName) ||
+    packageName.length > 200
+  ) {
+    return res.status(400).json({ error: "A valid Android packageName is required for app identity tracking." });
+  }
 
   if (
     typeof zipBase64 !== "string" ||
@@ -107,6 +115,67 @@ export default async function handler(req, res) {
       });
     }
 
+
+    // Keep a permanent app identity record in the private build repository.
+    // The package name is the stable app key across future update builds.
+    const registryPath = `apps/${packageName}.json`;
+    const registryUrl = `${apiUrl}/contents/${registryPath}`;
+    let existingRecord = null;
+    let existingSha = null;
+    const existingResponse = await fetch(registryUrl, { headers });
+    if (existingResponse.ok) {
+      const existingFile = await existingResponse.json();
+      existingSha = existingFile.sha;
+      try {
+        existingRecord = JSON.parse(Buffer.from(existingFile.content, "base64").toString("utf8"));
+      } catch {
+        return res.status(409).json({ error: "The saved app identity record is unreadable. Build was stopped to protect app identity." });
+      }
+      if (existingRecord.packageName !== packageName) {
+        return res.status(409).json({ error: "Saved app identity does not match the requested package name." });
+      }
+    } else if (existingResponse.status !== 404) {
+      const detail = await existingResponse.text();
+      return res.status(502).json({ error: "Could not read app identity record.", details: detail.slice(0, 500) });
+    }
+
+    const now = new Date().toISOString();
+    const buildRecord = {
+      buildId,
+      zipName,
+      appName: safeName,
+      createdAt: now
+    };
+    const registry = {
+      schemaVersion: 1,
+      packageName,
+      appName: String(appName || safeName).slice(0, 100),
+      createdAt: existingRecord?.createdAt || now,
+      updatedAt: now,
+      latestBuildId: buildId,
+      builds: [...(Array.isArray(existingRecord?.builds) ? existingRecord.builds : []), buildRecord].slice(-50)
+    };
+    const registryBody = {
+      message: existingSha
+        ? `Update app identity: ${packageName}`
+        : `Register Android app identity: ${packageName}`,
+      content: Buffer.from(JSON.stringify(registry, null, 2)).toString("base64"),
+      branch,
+      ...(existingSha ? { sha: existingSha } : {})
+    };
+    const registryResponse = await fetch(registryUrl, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(registryBody)
+    });
+    if (!registryResponse.ok) {
+      const detail = await registryResponse.json();
+      return res.status(502).json({
+        error: "Could not save the app identity record. APK build was not started.",
+        details: detail.message || "GitHub registry update failed."
+      });
+    }
+
     // Start the APK build workflow.
     const workflowResponse = await fetch(
       `${apiUrl}/actions/workflows/build-apk.yml/dispatches`,
@@ -138,6 +207,8 @@ export default async function handler(req, res) {
       message: "Android project uploaded. APK build started.",
       zipName,
       buildId,
+      packageName,
+      appIdentitySaved: true,
       workflowUrl: `https://github.com/${owner}/${repo}/actions`
     });
 
