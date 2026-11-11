@@ -54,9 +54,20 @@ export default async function handler(req, res) {
   const repo = "rk-ai-apk-builds";
   const branch = "main";
 
-  const safeName = String(appName || "Android-App")
-    .replace(/[^a-zA-Z0-9_-]/g, "-")
-    .slice(0, 40) || "Android-App";
+  // Build filenames must start with an alphanumeric character.
+  // Strip leading/trailing separators and collapse repeated separators so
+  // Hindi/Unicode app names cannot produce invalid names such as "-----App".
+  const normalizedName = String(appName || "Android-App")
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[^a-zA-Z0-9]+|[^a-zA-Z0-9]+$/g, "")
+    .slice(0, 40)
+    .replace(/[^a-zA-Z0-9]+$/g, "");
+
+  const safeName = /^[A-Za-z0-9]/.test(normalizedName)
+    ? normalizedName
+    : "Android-App";
 
   const zipName = `${safeName}-${Date.now()}.zip`;
 
