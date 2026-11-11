@@ -729,7 +729,7 @@ const JAVA_RESERVED_WORDS = new Set([
 function getPackageName(requestedPackage, appName, features) {
   const explicit = String(requestedPackage || "").trim();
   const featureMatch = String(features || "").match(
-    /(?:package\\s*name|application\\s*id)\\s*:\\s*([a-zA-Z][a-zA-Z0-9_]*(?:\\.[a-zA-Z][a-zA-Z0-9_]*)+)/i
+    /(?:package\s*name|application\s*id)\s*:\s*([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+)/i
   );
 
   const candidate = explicit || featureMatch?.[1] || "";
@@ -753,7 +753,7 @@ function isValidPackage(value) {
   if (
     typeof value !== "string" ||
     value.length > 200 ||
-    !/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(value)
+    !/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(value)
   ) {
     return false;
   }
