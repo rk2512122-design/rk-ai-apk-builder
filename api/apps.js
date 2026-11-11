@@ -1,0 +1,42 @@
+export default async function handler(req, res) {
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ error: "Only GET requests are supported." });
+  }
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) return res.status(500).json({ error: "GITHUB_TOKEN is missing." });
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28"
+  };
+  try {
+    const response = await fetch("https://api.github.com/repos/rk2512122-design/rk-ai-apk-builds/contents/apps", { headers });
+    if (response.status === 404) return res.status(200).json({ apps: [] });
+    if (!response.ok) throw new Error("GitHub app registry returned HTTP " + response.status);
+    const entries = await response.json();
+    const files = entries.filter(item => item.type === "file" && item.name.endsWith(".json"));
+    const apps = [];
+    for (const file of files) {
+      const detailResponse = await fetch(file.url, { headers });
+      if (!detailResponse.ok) continue;
+      const detail = await detailResponse.json();
+      try {
+        const record = JSON.parse(Buffer.from(detail.content, "base64").toString("utf8"));
+        if (record && typeof record.packageName === "string") {
+          apps.push({
+            appName: String(record.appName || record.packageName),
+            packageName: record.packageName,
+            updatedAt: record.updatedAt || null,
+            latestBuildId: record.latestBuildId || null
+          });
+        }
+      } catch {}
+    }
+    apps.sort((a,b) => String(b.updatedAt||"").localeCompare(String(a.updatedAt||"")));
+    return res.status(200).json({ apps });
+  } catch (error) {
+    console.error("App registry error:", error);
+    return res.status(502).json({ error: "Could not load registered apps." });
+  }
+}
