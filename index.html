@@ -115,6 +115,12 @@ a{
 ZIP डाउनलोड करें या APK Build शुरू करें।
 </p>
 
+<label for="existingAppSelect">पहले से बना ऐप अपडेट करें (वैकल्पिक)</label>
+<select id="existingAppSelect">
+ <option value="">नया ऐप बनाना है</option>
+</select>
+<p class="note" id="identityHint">पुराने ऐप को चुनने पर उसका package name अपने आप इस्तेमाल होगा।</p>
+
 <label for="idea">आपका ऐप आइडिया</label>
 
 <textarea
@@ -187,6 +193,7 @@ APK बनाने के लिए GitHub Build System का उपयोग 
 let generatedFiles=[];
 let generatedPackageName="";
 let generatedAppName="";
+let selectedAppIdentity=null;
 let generatedText="";
 let currentBuildId="";
 let pollTimer=null;
@@ -194,6 +201,35 @@ let pollAttempts=0;
 
 const $=id=>document.getElementById(id);
 
+
+// Load registered apps from the private build repository through the server.
+async function loadRegisteredApps(){
+ try{
+  const response=await fetch("/api/apps",{cache:"no-store"});
+  const data=await readResponse(response);
+  const select=$("existingAppSelect");
+  for(const app of (data.apps||[])){
+   const option=document.createElement("option");
+   option.value=app.packageName;
+   option.textContent=app.appName+" ("+app.packageName+")";
+   option.dataset.appName=app.appName;
+   select.appendChild(option);
+  }
+ }catch(error){
+  $("identityHint").textContent="पुराने ऐप की सूची अभी लोड नहीं हुई। नया ऐप बनाने में कोई समस्या नहीं है।";
+ }
+}
+$("existingAppSelect").addEventListener("change",function(){
+ const option=this.options[this.selectedIndex];
+ selectedAppIdentity=this.value ? {
+  packageName:this.value,
+  appName:option.dataset.appName||option.textContent
+ } : null;
+ $("identityHint").textContent=selectedAppIdentity
+  ? "अपडेट मोड: "+selectedAppIdentity.appName+" — "+selectedAppIdentity.packageName
+  : "नया ऐप बनाना है।";
+});
+loadRegisteredApps();
 
 // Improved API response reader
 async function readResponse(response){
@@ -334,7 +370,7 @@ async function generateApp(){
   const response=await fetch("/api/generate",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({ idea })
+   body:JSON.stringify({ idea, ...(selectedAppIdentity ? { appName:selectedAppIdentity.appName, packageName:selectedAppIdentity.packageName } : {}) })
   });
 
   const data=await readResponse(response);
