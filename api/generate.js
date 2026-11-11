@@ -46,6 +46,9 @@ export default async function handler(req, res) {
   const safeAppType = appType.slice(0, 150);
   const safeFeatures = features.slice(0, 5000);
 
+  // Keep package identity deterministic for the same app name across generations.
+  // Different app names receive different package names; later builds of the same
+  // app must keep the same appName to remain update-compatible.
   const packageName = getPackageName(
     body.packageName,
     safeAppName,
