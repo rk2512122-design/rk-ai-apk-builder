@@ -764,17 +764,32 @@ include(":app")
       `app/src/main/java/${javaDirectory}/MainActivity.java`
   );
 
-  if (
-    !new RegExp(`package\s+${escapeRegex(packageName)}\s*;`).test(
-      mainActivity.content
-    )
-  ) {
+  const expectedMainPackage = new RegExp(
+    String.raw`^\\s*package\\s+${escapeRegex(packageName)}\\s*;`,
+    "m"
+  );
+
+  if (!expectedMainPackage.test(mainActivity.content)) {
     return res.status(422).json({
       error: "MainActivity package declaration is incorrect."
     });
   }
 
   for (const file of files.filter(item => item.path.endsWith(".java"))) {
+    const declaredPackage = file.content.match(/^\\s*package\\s+([a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*)*)\\s*;/m);
+    const expectedDirectory = file.path
+      .replace(/^app\\/src\\/main\\/java\\//, "")
+      .replace(/\\/[^/]+\\.java$/, "")
+      .replace(/\\//g, ".");
+    if (!declaredPackage || declaredPackage[1] !== expectedDirectory) {
+      return res.status(422).json({
+        error: "Java package declaration does not match its source directory.",
+        details: file.path,
+        expectedPackage: expectedDirectory,
+        actualPackage: declaredPackage?.[1] || null
+      });
+    }
+
     if (!checkJavaBraces(file.content)) {
       return res.status(422).json({
         error: "Java structure validation failed.",
