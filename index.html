@@ -345,7 +345,7 @@ async function generateApp(){
   generatedFiles=validateFiles(data.files);
   generatedPackageName=String(data.packageName||"").trim();
   generatedAppName=String(data.projectName||"").trim();
-  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName)) throw new Error("प्रोजेक्ट का स्थायी Package Name नहीं मिला।");
+  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName)) throw new Error("प्रोजेक्ट का स्थायी Package Name नहीं मिला।");
   generatedText=JSON.stringify(data,null,2);
 
   $("resultTitle").textContent="Android प्रोजेक्ट तैयार है";
