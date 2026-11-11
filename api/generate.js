@@ -1049,51 +1049,43 @@ function normalizeGradlePackage(files, packageName) {
   if (!file) return;
 
   let content = file.content;
-  if (!/plugins\s*\\{/.test(content)) {
-    content = `plugins {
-    id 'com.android.application'
-}
-
-` + content;
-  } else if (!/id\s+['"]com\\.android\\.application['"]/.test(content)) {
-    content = content.replace(/plugins\s*\\{/, match => match + `\\n    id 'com.android.application'`);
+  if (!/plugins\s*\{/.test(content)) {
+    content = "plugins {\n    id 'com.android.application'\n}\n\n" + content;
+  } else if (!/id\s+['"]com\.android\.application['"]/.test(content)) {
+    content = content.replace(/plugins\s*\{/, match => match + "\n    id 'com.android.application'");
   }
 
   if (/namespace\s+['"][^'"]+['"]/.test(content)) {
-    content = content.replace(/namespace\s+['"][^'"]+['"]/, `namespace '${packageName}'`);
+    content = content.replace(/namespace\s+['"][^'"]+['"]/, "namespace '" + packageName + "'");
   } else {
-    content = content.replace(/android\s*\\{/, match => match + `\\n    namespace '${packageName}'`);
+    content = content.replace(/android\s*\{/, match => match + "\n    namespace '" + packageName + "'");
   }
 
   if (/applicationId\s+['"][^'"]+['"]/.test(content)) {
-    content = content.replace(/applicationId\s+['"][^'"]+['"]/, `applicationId '${packageName}'`);
-  } else if (/defaultConfig\s*\\{/.test(content)) {
-    content = content.replace(/defaultConfig\s*\\{/, match => match + `\\n        applicationId '${packageName}'`);
+    content = content.replace(/applicationId\s+['"][^'"]+['"]/, "applicationId '" + packageName + "'");
+  } else if (/defaultConfig\s*\{/.test(content)) {
+    content = content.replace(/defaultConfig\s*\{/, match => match + "\n        applicationId '" + packageName + "'");
   }
 
   const setNumber = (key, value) => {
-    const pattern = new RegExp(`(\\\b${key}\\\s+)\\\\d+`);
-    if (pattern.test(content)) content = content.replace(pattern, `$1${value}`);
-    else if (key === "compileSdk") content = content.replace(/android\s*\\{/, match => match + `\\n    compileSdk ${value}`);
-    else content = content.replace(/defaultConfig\s*\\{/, match => match + `\\n        ${key} ${value}`);
+    const pattern = new RegExp("(\\b" + key + "\\s+)\\d+");
+    if (pattern.test(content)) content = content.replace(pattern, "$1" + value);
+    else if (key === "compileSdk") content = content.replace(/android\s*\{/, match => match + "\n    compileSdk " + value);
+    else content = content.replace(/defaultConfig\s*\{/, match => match + "\n        " + key + " " + value);
   };
 
   setNumber("compileSdk", 35);
   setNumber("minSdk", 24);
   setNumber("targetSdk", 35);
 
-  if (!/versionCode\s+\\d+/.test(content)) {
-    content = content.replace(/defaultConfig\s*\\{/, match => match + `\\n        versionCode 1`);
+  if (!/versionCode\s+\d+/.test(content)) {
+    content = content.replace(/defaultConfig\s*\{/, match => match + "\n        versionCode 1");
   }
   if (!/versionName\s+['"][^'"]+['"]/.test(content)) {
-    content = content.replace(/defaultConfig\s*\\{/, match => match + `\\n        versionName '1.0'`);
+    content = content.replace(/defaultConfig\s*\{/, match => match + "\n        versionName '1.0'");
   }
-  if (!/compileOptions\s*\\{/.test(content)) {
-    content = content.replace(/android\s*\\{/, match => match + `
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }`);
+  if (!/compileOptions\s*\{/.test(content)) {
+    content = content.replace(/android\s*\{/, match => match + "\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }");
   }
   file.content = content;
 }
