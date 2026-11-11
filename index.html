@@ -115,46 +115,18 @@ a{
 ZIP डाउनलोड करें या APK Build शुरू करें।
 </p>
 
-<label for="appname">ऐप का नाम</label>
-<input
- id="appname"
- maxlength="100"
- placeholder="जैसे: My Smart App"
->
-
-<label for="apptype">ऐप की कैटेगरी</label>
-
-<select id="apptype">
-<option value="Education App">Education & Learning</option>
-<option value="Calculator and Utility App">Calculator & Tools</option>
-<option value="Music and Video App">Music & Video Player</option>
-<option value="Game App">Games & Entertainment</option>
-<option value="Business and Finance App">Business & Finance</option>
-<option value="Shopping and E-commerce App">Shopping & E-commerce</option>
-<option value="Social Media and Chat App">Social Media & Chat</option>
-<option value="News and Blog App">News & Blog</option>
-<option value="Health and Fitness App">Health & Fitness</option>
-<option value="Travel and Booking App">Travel & Booking</option>
-<option value="Food and Restaurant App">Food & Restaurant</option>
-<option value="Photo and Video Editor App">Photo & Video Editor</option>
-<option value="AI Assistant and Chatbot App">AI Assistant & Chatbot</option>
-<option value="Productivity and Notes App">Productivity & Notes</option>
-<option value="Utility and Security App">Utility & Security</option>
-<option value="Real Estate App">Real Estate</option>
-<option value="Job and Career App">Job & Career</option>
-<option value="Religious and Spiritual App">Religious & Spiritual</option>
-<option value="Kids and Learning App">Kids & Learning</option>
-<option value="Other Custom Android App">Other / Custom App</option>
-</select>
-
-<label for="features">ऐप में क्या-क्या चाहिए?</label>
+<label for="idea">आपका ऐप आइडिया</label>
 
 <textarea
- id="features"
- rows="6"
+ id="idea"
+ rows="9"
  maxlength="5000"
- placeholder="अपने ऐप के सभी फीचर्स विस्तार से लिखें..."
+ placeholder="उदाहरण: मुझे एक AI Chatbot ऐप बनाकर दो जिसमें हिंदी और English में चैट कर सकूँ, AI से इमेज बना सकूँ, हर चैट अलग सेव हो और पुरानी चैट History से दोबारा खोल सकूँ।"
 ></textarea>
+
+<p class="note">
+बस अपना आइडिया अपनी भाषा में लिखें। ऐप का नाम, कैटेगरी, डिजाइन, स्क्रीन और फीचर्स AI खुद समझकर तैयार करेगा।
+</p>
 
 <button id="generateBtn" onclick="generateApp()">
 AI से पूरा ऐप बनवाएँ
@@ -314,12 +286,10 @@ function validateFiles(files){
 // Generate Android project
 async function generateApp(){
 
- const appName=$("appname").value.trim();
- const appType=$("apptype").value;
- const features=$("features").value.trim();
+ const idea=$("idea").value.trim();
 
- if(!appName||!features){
-  alert("ऐप का नाम और फीचर्स लिखें।");
+ if(!idea){
+  alert("पहले अपना ऐप आइडिया लिखें।");
   return;
  }
 
@@ -353,11 +323,7 @@ async function generateApp(){
   const response=await fetch("/api/generate",{
    method:"POST",
    headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({
-    appName,
-    appType,
-    features
-   })
+   body:JSON.stringify({ idea })
   });
 
   const data=await readResponse(response);
@@ -508,7 +474,7 @@ function downloadProject(){
   const url=URL.createObjectURL(blob);
   const link=document.createElement("a");
 
-  const name=($("appname").value.trim()||"AndroidProject")
+  const name=(($("idea").value.trim().split(/[.!?\\n]/)[0]||"AndroidProject").slice(0,40))
    .replace(/[^a-zA-Z0-9_-]+/g,"_");
 
   link.href=url;
@@ -579,7 +545,7 @@ async function buildApk(){
    method:"POST",
    headers:{"Content-Type":"application/json"},
    body:JSON.stringify({
-    appName:$("appname").value.trim(),
+    appName:(($("idea").value.trim().split(/[.!?\\n]/)[0]||"AndroidProject").slice(0,40)),
     zipBase64:base64
    })
   });
