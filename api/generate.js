@@ -76,7 +76,7 @@ export default async function handler(req, res) {
  18. When sending history to the backend, use the currently active conversation in chronological order and do not send messages from a different chat.
  19. MULTIPLE SAVED CONVERSATIONS ARE REQUIRED, similar to a chat-history sidebar in a modern AI chat app. Do not implement only one global message list.
  20. Store a collection of conversations locally. Each conversation must have a unique stable ID, a title, created/updated timestamps, and its own ordered list of user/assistant messages. Use SQLite/Room or a robust SharedPreferences JSON structure.
- 21. Add an accessible Chat History entry point in the app toolbar (for example, a menu button) that opens a navigation drawer or history screen listing saved conversations, newest updated first. Each row should show a short title derived from the first user message and a useful date/time if space allows.
+ 21. Add an accessible Chat History entry point in the app toolbar (for example, a menu button) that opens a navigation drawer or history screen listing saved conversations, newest updated first. Each row must show a short title derived from the first meaningful user message (never show "New Conversation" when a user message exists) and a useful date/time if space allows.
  22. Tapping a history row must open that exact conversation and render its messages in chronological order. The user must be able to continue that conversation; save each new message to that conversation's ID.
  23. New Chat must create a new, separate empty conversation and make it active. It must not overwrite, merge with, or delete any previous conversation.
  24. On a fresh app launch, show a clean new-chat screen by default, while keeping all previous conversations accessible from Chat History. Do not automatically reopen the last conversation on the main screen.
@@ -110,6 +110,7 @@ UNIVERSAL IDEA-TO-APP RULES — APPLY TO EVERY APP CATEGORY:
 7. For features needing internet, add secure backend integration only when a real configured endpoint exists. Never put API keys, passwords, tokens, or private secrets in the APK.
 8. Never fake online services, AI, image generation, payments, maps, login, cloud sync, messaging, or live data. If a real provider or backend is not configured, do not claim that feature works; provide a clear unavailable/configuration state rather than simulated results.
 9. For AI chat, image generation, speech, or other AI features, use a secure server endpoint and parse its real response. Keep secrets on the server. If no suitable endpoint exists, state this limitation clearly in the generated app rather than inventing successful results.
+   For image generation, do not merely switch the input hint or show an "Image Generation Mode ON" toast. Implement a complete real image-generation request/response flow only if a configured image-generation backend exists: send the user's prompt, show progress, display the returned image, and provide save/share/retry actions. If the backend is not available, clearly mark image generation as unavailable and do not pretend an image was generated.
 10. Add input validation, loading and error states, retry actions, and helpful feedback for network-dependent features.
 11. Do not create unnecessary features unrelated to the user's idea. Keep the app focused, polished, and easy for a non-technical user.
 12. Before returning files, verify that the requested primary user journey can be completed using the generated screens and controls, and that referenced resources, permissions, and dependencies are present.
@@ -127,12 +128,20 @@ PRODUCT DESIGN AND USER EXPERIENCE:
 5. Use readable text sizes, strong contrast and comfortable touch targets (normally at least 48dp).
 6. Avoid cramped layouts, excessive empty space, generic placeholder cards and unnecessary decoration.
 7. Do not place important text or controls underneath the status bar, camera cutout or system navigation bar.
+   For a chat app specifically, use a stable top app bar: place the app title and history/menu action on the left, and image/new-chat/clear actions in a properly spaced horizontal action area or overflow menu. Never overlap the clock/status icons, app title, or toolbar actions. Use compact icon buttons with content descriptions and minimum 48dp touch targets.
 8. Support edge-to-edge and system insets correctly. Apply WindowInsets to the root content so status-bar and navigation-bar areas are respected. Do not simply add arbitrary top margins.
 9. Make layouts responsive on small and large Android phones, portrait and landscape where practical. Avoid fixed screen coordinates and oversized fixed heights.
 10. Use dp for dimensions and sp for text. Use ConstraintLayout, LinearLayout, FrameLayout or other standard Android layouts appropriately.
 11. Long titles, large numbers and narrow screens must not overlap or get clipped. Allow wrapping, scrolling or ellipsizing where appropriate.
 12. Keep bottom navigation and floating buttons clear of the system navigation area and gesture area.
-13. Forms must remain usable when the keyboard opens. Use adjustResize or the appropriate modern window-inset handling, and allow content to scroll.
+13. FORMS AND KEYBOARD — STRICT CHAT INPUT REQUIREMENTS:
+   a. Chat screen must use a layout that resizes when the soft keyboard opens: set windowSoftInputMode="adjustResize" on the launcher Activity (or implement correct WindowInsets/IME insets for edge-to-edge).
+   b. The message composer must remain fully visible directly above the keyboard while typing. It must never be hidden behind the keyboard or system navigation bar.
+   c. Put the message list in a weighted/0dp-height scrolling container and pin the composer to the bottom of the app content; do not position it with fixed screen coordinates or overlay it behind the IME.
+   d. When the keyboard opens, resize the message area and keep the composer/input field and send button visible. The user must see every character as it is typed without dismissing the keyboard.
+   e. Ensure the EditText has a visible background, sufficient contrast, text color, hint color, cursor, padding and minimum height. Do not make it transparent or cover it with another view.
+   f. After sending, clear the input only after capturing the text; keep the latest message visible and scroll the conversation to the bottom.
+   g. Test the screen at a small phone size with the keyboard open, with multi-line text and Hindi/English input.
 14. Dialogs and bottom sheets must fit on small screens, scroll when needed and keep buttons visible.
 15. Provide helpful empty states, validation messages, loading states and success/error feedback.
 16. All buttons, tabs, search fields, settings and other visible controls must perform their stated action.
