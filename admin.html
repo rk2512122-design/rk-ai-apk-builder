@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RK AI APK Builder — Admin</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:18px;font-family:Arial,sans-serif;background:#0b1220;color:#fff}
+main{max-width:760px;margin:24px auto;background:#172238;border:1px solid #30415d;border-radius:16px;padding:22px}
+h1{color:#18e5ee;text-align:center}p{line-height:1.6;color:#c3d0e4}
+input,button{width:100%;padding:14px;margin-top:10px;border-radius:9px;font-size:16px}
+input{background:#0b1220;color:white;border:1px solid #40516e}button{border:0;background:#18bfc9;color:#07111e;font-weight:bold}
+.card{background:#0b1220;border:1px solid #30415d;border-radius:12px;padding:14px;margin-top:12px;overflow-wrap:anywhere}
+.muted{color:#aabbd2;font-size:13px}.status{margin-top:14px;color:#57e39b}.hidden{display:none}
+</style>
+</head>
+<body><main>
+<h1>🔐 RK AI Admin Panel</h1>
+<p>यह पैनल केवल Admin के लिए है। आपका पासवर्ड सुरक्षित सर्वर पर जाँचा जाता है।</p>
+<section id="login">
+<label for="password">Admin Password</label>
+<input id="password" type="password" autocomplete="current-password" placeholder="अपना Admin Password डालें">
+<button id="loginBtn">Admin Login</button>
+</section>
+<section id="dashboard" class="hidden">
+<p class="status">Admin login सफल। Private app registry:</p>
+<button id="refreshBtn">ऐप सूची Refresh करें</button>
+<div id="apps"></div>
+<button id="logoutBtn" style="background:#8da8ff">Logout</button>
+</section>
+<p id="status" class="status" role="status"></p>
+</main>
+<script>
+let adminPassword="";
+const $=id=>document.getElementById(id);
+async function loadApps(){
+ $("status").textContent="Private app records लोड हो रहे हैं...";
+ try{
+  const response=await fetch("/api/admin/apps",{headers:{"x-admin-password":adminPassword},cache:"no-store"});
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||"Apps load नहीं हुए।");
+  $("apps").replaceChildren();
+  if(!data.apps.length){$("apps").textContent="अभी कोई ऐप रजिस्टर्ड नहीं है।";} 
+  for(const app of data.apps){
+   const card=document.createElement("article");card.className="card";
+   const title=document.createElement("strong");title.textContent=app.appName;
+   const pkg=document.createElement("p");pkg.textContent="Package: "+app.packageName;
+   const meta=document.createElement("p");meta.className="muted";
+   meta.textContent="Build records: "+app.builds+" · Last build: "+(app.latestBuildId||"अभी नहीं");
+   card.append(title,pkg,meta);$("apps").append(card);
+  }
+  $("status").textContent="कुल "+data.apps.length+" ऐप मिले।";
+ }catch(e){$("status").textContent=e.message;}
+}
+$("loginBtn").onclick=async()=>{
+ adminPassword=$("password").value;
+ if(!adminPassword){$("status").textContent="Admin Password डालें।";return;}
+ await loadApps();
+ if(!$("status").textContent.includes("गलत")&&!$("status").textContent.includes("नहीं")&&!$("status").textContent.includes("not configured")&&!$("status").textContent.includes("नहीं मिला")){
+  $("login").classList.add("hidden");$("dashboard").classList.remove("hidden");
+ }
+};
+$("refreshBtn").onclick=loadApps;
+$("logoutBtn").onclick=()=>{
+ adminPassword="";$("password").value="";
+ $("dashboard").classList.add("hidden");$("login").classList.remove("hidden");
+ $("apps").replaceChildren();$("status").textContent="Logout हो गया।";
+};
+$("password").addEventListener("keydown",e=>{if(e.key==="Enter")$("loginBtn").click();});
+</script></body></html>
