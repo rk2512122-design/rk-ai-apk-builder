@@ -250,6 +250,17 @@ FINAL QUALITY CHECK:
 76. Confirm the launcher icon exists, is valid VectorDrawable XML and is referenced correctly.
 77. Fix detected errors before returning the project.
 
+ABSOLUTE REQUIRED FILE PATHS — THESE MUST ALL BE INCLUDED EXACTLY:
+- settings.gradle
+- build.gradle
+- app/build.gradle
+- gradle.properties
+- app/src/main/AndroidManifest.xml
+- app/src/main/java/com/rkai/rksmartassistant/MainActivity.java
+- app/src/main/res/drawable/ic_launcher.xml
+
+For RK AI Smart Assistant, MainActivity.java MUST be at the exact path above and declare package com.rkai.rksmartassistant;. Do not rename it or put it in another folder. Do not omit any path in this list. Include all referenced layout, drawable, values, menu and other resources as additional files. Before returning JSON, compare the files array against this exact list and add any missing file with complete valid content.
+
 RETURN ONLY VALID JSON:
 {
   "projectName": "Application Name",
@@ -689,7 +700,8 @@ function validateProject(project, res, appName, packageName) {
   if (missing.length) {
     return res.status(422).json({
       error: "Required Android files are missing.",
-      missingFiles: missing
+      missingFiles: missing,
+      hint: "Gemini omitted one or more mandatory files. Regenerate with the exact required file paths shown in the request."
     });
   }
 
