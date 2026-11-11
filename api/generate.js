@@ -706,6 +706,16 @@ function validateProject(project, res, appName, packageName) {
 
   ensureGradleProperties(files);
 
+  // Use one known-good root plugin declaration for every generated project.
+  const rootGradleFile = files.find(file => file.path === "build.gradle");
+  if (rootGradleFile) {
+    rootGradleFile.content = `plugins {
+    id 'com.android.application' version '8.6.1' apply false
+}
+`;
+  }
+
+
   // Normalize settings.gradle instead of rejecting valid-but-differently-formatted
   // Gemini output. This guarantees the repository policy and plugin repositories.
   const settingsFile = files.find(file => file.path === "settings.gradle");
@@ -887,10 +897,17 @@ const JAVA_RESERVED_WORDS = new Set([
 ]);
 
 function deriveAppName(idea) {
-  const words = String(idea || "")
+  const source = String(idea || "").trim();
+  const hindiName = source.match(/नाम\\s*(?:का|की|वाला|वाली)\\s*([A-Za-z][A-Za-z0-9]*(?:[ -][A-Za-z0-9]+){0,3})/i);
+  if (hindiName?.[1]) return hindiName[1].trim();
+
+  const englishName = source.match(/\\b(?:called|named)\\s+([A-Za-z][A-Za-z0-9]*(?:[ -][A-Za-z0-9]+){0,3})/i);
+  if (englishName?.[1]) return englishName[1].trim();
+
+  const words = source
     .replace(/[^\\p{L}\\p{N} ]/gu, " ")
     .trim()
-    .split(/\\s+/)
+    .split(/\\s+/u)
     .filter(Boolean)
     .slice(0, 4);
   return words.length ? words.join(" ") + " App" : "RK Custom App";
@@ -1032,21 +1049,54 @@ function normalizeGradlePackage(files, packageName) {
   if (!file) return;
 
   let content = file.content;
-  if (/namespace\s+['"][^'"]+['"]/.test(content)) {
-    content = content.replace(
-      /namespace\s+['"][^'"]+['"]/,
-      `namespace '${packageName}'`
-    );
+  if (!/plugins\\s*\\{/.test(content)) {
+    content = `plugins {
+    id 'com.android.application'
+}
+
+` + content;
+  } else if (!/id\\s+['"]com\\.android\\.application['"]/.test(content)) {
+    content = content.replace(/plugins\\s*\\{/, match => match + `\\n    id 'com.android.application'`);
   }
-  if (/applicationId\s+['"][^'"]+['"]/.test(content)) {
-    content = content.replace(
-      /applicationId\s+['"][^'"]+['"]/,
-      `applicationId '${packageName}'`
-    );
+
+  if (/namespace\\s+['"][^'"]+['"]/.test(content)) {
+    content = content.replace(/namespace\\s+['"][^'"]+['"]/, `namespace '${packageName}'`);
+  } else {
+    content = content.replace(/android\\s*\\{/, match => match + `\\n    namespace '${packageName}'`);
+  }
+
+  if (/applicationId\\s+['"][^'"]+['"]/.test(content)) {
+    content = content.replace(/applicationId\\s+['"][^'"]+['"]/, `applicationId '${packageName}'`);
+  } else if (/defaultConfig\\s*\\{/.test(content)) {
+    content = content.replace(/defaultConfig\\s*\\{/, match => match + `\\n        applicationId '${packageName}'`);
+  }
+
+  const setNumber = (key, value) => {
+    const pattern = new RegExp(`(\\\\b${key}\\\\s+)\\\\d+`);
+    if (pattern.test(content)) content = content.replace(pattern, `$1${value}`);
+    else if (key === "compileSdk") content = content.replace(/android\\s*\\{/, match => match + `\\n    compileSdk ${value}`);
+    else content = content.replace(/defaultConfig\\s*\\{/, match => match + `\\n        ${key} ${value}`);
+  };
+
+  setNumber("compileSdk", 35);
+  setNumber("minSdk", 24);
+  setNumber("targetSdk", 35);
+
+  if (!/versionCode\\s+\\d+/.test(content)) {
+    content = content.replace(/defaultConfig\\s*\\{/, match => match + `\\n        versionCode 1`);
+  }
+  if (!/versionName\\s+['"][^'"]+['"]/.test(content)) {
+    content = content.replace(/defaultConfig\\s*\\{/, match => match + `\\n        versionName '1.0'`);
+  }
+  if (!/compileOptions\\s*\\{/.test(content)) {
+    content = content.replace(/android\\s*\\{/, match => match + `
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }`);
   }
   file.content = content;
 }
-
 
 function getPackageFromGradle(files) {
   const app = getContent(files, "app/build.gradle");
