@@ -48,6 +48,21 @@ export default async function handler(req, res) {
     safeFeatures
   );
 
+  const isChatApp = /chatbot|chat bot|ai chat|chat app|messaging/i.test(safeAppName + " " + safeAppType + " " + safeFeatures);
+  const chatInstructions = isChatApp ? `
+
+ SPECIAL AI CHATBOT INTEGRATION — MANDATORY:
+ 1. Call the secure backend endpoint https://rk-ai-apk-builder.vercel.app/api/chat using HTTPS POST.
+ 2. Send Content-Type application/json and JSON body { "message": latestUserMessage, "history": [ { "role": "user" or "assistant", "content": "..." } ] }.
+ 3. Parse response JSON field "reply", with "response" or "answer" as fallback, and show the actual backend response in the assistant bubble.
+ 4. Never call Gemini directly from Android. Never include any API key, token or secret in the APK.
+ 5. Add android.permission.INTERNET to AndroidManifest.xml.
+ 6. Use network requests off the main UI thread, with connection/read timeouts, and update views on the main thread.
+ 7. Show a loading state. For non-2xx responses, invalid JSON, timeout or no internet, show a useful error and allow retry.
+ 8. Send recent conversation history in chronological order; use role "user" for user messages and "assistant" for assistant replies.
+ 9. Never use simulated or hard-coded AI replies. Every assistant answer must come from the backend.
+ 10. The welcome greeting may be local but must not be presented as an AI-generated answer.
+` : "";
   const prompt = `
 You are a senior Android product designer and expert Android Java engineer.
 Create a complete, polished, production-style Android Studio project. This must be a genuinely functional app, not a UI mockup.
@@ -60,6 +75,8 @@ ${safeAppType}
 
 USER REQUIREMENTS:
 ${safeFeatures}
+
+${chatInstructions}
 
 EXACT ANDROID PACKAGE:
 ${packageName}
