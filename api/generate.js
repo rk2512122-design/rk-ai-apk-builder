@@ -97,8 +97,22 @@ ${safeAppName}
 APP CATEGORY:
 ${safeAppType}
 
-USER REQUIREMENTS:
+USER REQUIREMENTS (THE USER'S NATURAL-LANGUAGE APP IDEA):
 ${safeFeatures}
+
+UNIVERSAL IDEA-TO-APP RULES — APPLY TO EVERY APP CATEGORY:
+1. Treat the user's idea as the product brief. Infer the app's purpose, target users, main user journey, screens, navigation, data model, and sensible supporting features without requiring the user to provide technical specifications.
+2. Build the app that the user actually described. Do not force every idea into a chatbot, dashboard, notes app, or generic template.
+3. Convert each requested capability into a real working feature. Every visible button, menu, form, tab, setting, and navigation item must work. Do not add decorative controls or pretend functionality.
+4. Make sensible product decisions when details are missing: choose a clean, accessible design, simple navigation, safe defaults, useful empty states, and mobile-first layouts. Do not block generation merely because optional details are unspecified.
+5. For complex ideas, implement a coherent first version with the most important requested workflow working end-to-end. Do not omit requested core features silently.
+6. Persist user-created data locally when appropriate. Use appropriate Android storage and explain in the app UI when data is local-only.
+7. For features needing internet, add secure backend integration only when a real configured endpoint exists. Never put API keys, passwords, tokens, or private secrets in the APK.
+8. Never fake online services, AI, image generation, payments, maps, login, cloud sync, messaging, or live data. If a real provider or backend is not configured, do not claim that feature works; provide a clear unavailable/configuration state rather than simulated results.
+9. For AI chat, image generation, speech, or other AI features, use a secure server endpoint and parse its real response. Keep secrets on the server. If no suitable endpoint exists, state this limitation clearly in the generated app rather than inventing successful results.
+10. Add input validation, loading and error states, retry actions, and helpful feedback for network-dependent features.
+11. Do not create unnecessary features unrelated to the user's idea. Keep the app focused, polished, and easy for a non-technical user.
+12. Before returning files, verify that the requested primary user journey can be completed using the generated screens and controls, and that referenced resources, permissions, and dependencies are present.
 
 ${chatInstructions}
 
