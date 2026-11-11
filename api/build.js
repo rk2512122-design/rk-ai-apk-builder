@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
   if (
     typeof packageName !== "string" ||
-    !/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(packageName) ||
+    !/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(packageName) ||
     packageName.length > 200
   ) {
     return res.status(400).json({ error: "A valid Android packageName is required for app identity tracking." });
@@ -185,7 +185,8 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           ref: branch,
           inputs: {
-            zip_name: zipName
+            zip_name: zipName,
+            package_name: packageName
           }
         })
       }
