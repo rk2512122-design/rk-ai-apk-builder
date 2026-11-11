@@ -144,6 +144,13 @@ ${chatInstructions}
 EXACT ANDROID PACKAGE:
 ${packageName}
 
+PACKAGE CONSISTENCY — BUILD-BLOCKING REQUIREMENT:
+- Use exactly ${packageName} for Gradle namespace, applicationId, every Java package declaration, manifest component name and every fully-qualified custom View reference in XML.
+- Never copy a package name from a different project or previous app. Do not use com.rkai.rksmartassistant unless that is the exact package printed above.
+- MainActivity.java must be located at app/src/main/java/${packageName with dots replaced by slashes}/MainActivity.java.
+- Every Activity or custom View declared in AndroidManifest.xml or referenced by a layout must resolve to a real class in this project.
+- Before returning the ZIP, compare the package declarations and fully-qualified manifest/layout references against the exact package above. Correct any mismatch before returning files.
+
 PRODUCT DESIGN AND USER EXPERIENCE:
 APP LAYOUT SAFETY — STRICT, APPLY TO EVERY GENERATED APP:
 - The app content must never draw underneath the Android status bar or navigation bar. Prefer a non-edge-to-edge content layout unless WindowInsets are explicitly implemented correctly. Do not combine edge-to-edge flags with guessed padding.
