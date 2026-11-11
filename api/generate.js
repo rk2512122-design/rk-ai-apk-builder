@@ -27,20 +27,24 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Invalid request mode." });
   }
 
-  const { appName, appType, features } = body;
-  if (
-    !String(appName || "").trim() ||
-    !String(appType || "").trim() ||
-    !String(features || "").trim()
-  ) {
+  // Accept a single natural-language idea as the primary user input.
+  const idea = String(body.idea || body.prompt || "").trim();
+  const rawFeatures = String(body.features || idea || "").trim();
+  const inferredName = deriveAppName(idea || rawFeatures);
+  const inferredType = inferAppType(idea || rawFeatures);
+  const appName = String(body.appName || inferredName).trim();
+  const appType = String(body.appType || inferredType).trim();
+  const features = rawFeatures;
+
+  if (!features) {
     return res.status(400).json({
-      error: "App name, app type and features are required."
+      error: "Please describe your app idea."
     });
   }
 
-  const safeAppName = String(appName).trim().slice(0, 100);
-  const safeAppType = String(appType).trim().slice(0, 150);
-  const safeFeatures = String(features).trim().slice(0, 5000);
+  const safeAppName = appName.slice(0, 100);
+  const safeAppType = appType.slice(0, 150);
+  const safeFeatures = features.slice(0, 5000);
 
   const packageName = getPackageName(
     body.packageName,
@@ -762,6 +766,34 @@ const JAVA_RESERVED_WORDS = new Set([
   "transient", "try", "void", "volatile", "while", "true", "false",
   "null", "_"
 ]);
+
+function deriveAppName(idea) {
+  const words = String(idea || "")
+    .replace(/[^\\p{L}\\p{N} ]/gu, " ")
+    .trim()
+    .split(/\\s+/)
+    .filter(Boolean)
+    .slice(0, 4);
+  return words.length ? words.join(" ") + " App" : "RK Custom App";
+}
+
+function inferAppType(idea) {
+  const value = String(idea || "").toLowerCase();
+  const categories = [
+    [/chat|messag|बातचीत|चैट|assistant|सहायक/, "AI Chat and Assistant App"],
+    [/image|photo|चित्र|इमेज|तस्वीर/, "Image and Photo App"],
+    [/game|खेल|gaming/, "Game and Entertainment App"],
+    [/shop|store|खरीद|दुकान|ecommerce/, "Shopping App"],
+    [/music|song|audio|गाना|संगीत/, "Music and Audio App"],
+    [/video|movie|वीडियो/, "Video App"],
+    [/note|याद|लिख|notes/, "Notes and Productivity App"],
+    [/finance|money|budget|खर्च|पैसा|बैंक/, "Finance App"],
+    [/fitness|workout|health|सेहत|स्वास्थ्य/, "Health and Fitness App"],
+    [/learn|study|education|पढ़|सीख|शिक्षा/, "Education App"]
+  ];
+  const match = categories.find(([pattern]) => pattern.test(value));
+  return match ? match[1] : "Custom Android App";
+}
 
 function getPackageName(requestedPackage, appName, features) {
   const explicit = String(requestedPackage || "").trim();
