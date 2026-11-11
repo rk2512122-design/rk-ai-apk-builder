@@ -765,7 +765,7 @@ include(":app")
   );
 
   const expectedMainPackage = new RegExp(
-    String.raw`^\\s*package\\s+${escapeRegex(packageName)}\\s*;`,
+    String.raw`^\s*package\s+${escapeRegex(packageName)}\s*;`,
     "m"
   );
 
