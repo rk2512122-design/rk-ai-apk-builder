@@ -714,30 +714,52 @@ function validateProject(project, res, appName, packageName) {
 }
 
 
+const JAVA_RESERVED_WORDS = new Set([
+  "abstract", "assert", "boolean", "break", "byte", "case", "catch",
+  "char", "class", "const", "continue", "default", "do", "double",
+  "else", "enum", "extends", "final", "finally", "float", "for",
+  "goto", "if", "implements", "import", "instanceof", "int",
+  "interface", "long", "native", "new", "package", "private",
+  "protected", "public", "return", "short", "static", "strictfp",
+  "super", "switch", "synchronized", "this", "throw", "throws",
+  "transient", "try", "void", "volatile", "while", "true", "false",
+  "null", "_"
+]);
+
 function getPackageName(requestedPackage, appName, features) {
   const explicit = String(requestedPackage || "").trim();
   const featureMatch = String(features || "").match(
-    /(?:package\s*name|application\s*id)\s*:\s*([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+)/i
+    /(?:package\\s*name|application\\s*id)\\s*:\\s*([a-zA-Z][a-zA-Z0-9_]*(?:\\.[a-zA-Z][a-zA-Z0-9_]*)+)/i
   );
 
   const candidate = explicit || featureMatch?.[1] || "";
   if (candidate && isValidPackage(candidate)) return candidate;
 
-  const slug =
+  let slug =
     String(appName || "myapp")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "")
       .slice(0, 35) || "myapp";
 
+  // Java package segments must start with a letter and cannot be keywords.
+  if (!/^[a-z]/.test(slug) || JAVA_RESERVED_WORDS.has(slug)) {
+    slug = "app" + slug;
+  }
+
   return `com.rkai.${slug}`;
 }
 
-
 function isValidPackage(value) {
-  return (
-    typeof value === "string" &&
-    value.length <= 200 &&
-    /^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(value)
+  if (
+    typeof value !== "string" ||
+    value.length > 200 ||
+    !/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(value)
+  ) {
+    return false;
+  }
+
+  return value.split(".").every(
+    segment => !JAVA_RESERVED_WORDS.has(segment)
   );
 }
 
