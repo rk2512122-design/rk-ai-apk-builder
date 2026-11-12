@@ -93,7 +93,7 @@ export default async function handler(req, res) {
  29. Add clear navigation between the chat screen and history screen/drawer, with a back action returning to the current chat. The history UI must be usable on small Android phones.
  30. Do not claim cloud sync or account-based sync; all history is local to this device unless a real secure sync backend is implemented.
 ` : "";
-  const prompt = `
+  const detailedPrompt = `
 You are a senior Android product designer and expert Android Java engineer.
 Create a complete, polished, production-style Android Studio project. This must be a genuinely functional app, not a UI mockup.
 
@@ -295,6 +295,44 @@ No explanation outside JSON.
 Every file must contain complete content.
 Every path must be relative to the project root.
 `;
+
+  // Ordinary apps use a short, idea-first prompt. This avoids sending the
+  // large assistant/chat-specific specification for simple utilities.
+  const compactPrompt = `
+You are an expert Android Java developer. Build a complete, working Android Studio app from the user's idea. Understand natural Hindi, Hinglish and English equally; do not require formal or technical wording. Treat the user's idea as the source of truth, infer sensible details, and never add unrelated features.
+
+APP NAME: ${safeAppName}
+CATEGORY: ${safeAppType}
+USER IDEA (follow it faithfully):
+${safeFeatures}
+
+BUILD RULES:
+- Create the app actually requested, not a generic template. Prioritize the main feature and make every visible control work.
+- Use Java only, Android Gradle Plugin 8.6.1, compileSdk 35, minSdk 24, targetSdk 35, Java 17.
+- Exact package for namespace, applicationId and all Java declarations: ${packageName}
+- MainActivity path: app/src/main/java/${packageName.replace(/\\./g, "/")}/MainActivity.java
+- Include these complete files: settings.gradle, build.gradle, app/build.gradle, gradle.properties, app/src/main/AndroidManifest.xml, MainActivity.java at the exact path above, and app/src/main/res/drawable/ic_launcher.xml.
+- Add only the extra Java/XML/resource files genuinely needed. For a small utility app, prefer a compact project of about 7–12 complete files; do not add files just to increase the count.
+- Use a modern, polished, mobile-first design with clear typography, strong contrast, accessible touch targets, and proper status/navigation bar spacing.
+- Implement the requested feature for real. For a flashlight app, use Android CameraManager torch APIs, check whether the device has a flash, handle unavailable/permission/runtime errors gracefully, and make ON/OFF buttons actually control the torch. Do not simulate the torch.
+- All buttons and navigation must work. Do not create fake controls, placeholder screens, fake online services or unnecessary features.
+- Keep user data local when appropriate. Request only permissions actually needed.
+- Use safe Android APIs and handle missing hardware/features gracefully.
+- Create a valid, non-empty VectorDrawable launcher icon at app/src/main/res/drawable/ic_launcher.xml and reference it from the manifest.
+- Ensure all referenced resources/classes exist. Use valid XML, Java syntax and Gradle configuration. No Kotlin, no incomplete Gradle wrapper.
+- Validate package declarations, paths, manifest references and resource references before returning.
+
+Return ONLY one valid JSON object:
+{
+  "projectName": "${safeAppName}",
+  "files": [
+    {"path": "settings.gradle", "content": "complete content"}
+  ]
+}
+Include every required file and complete content. No Markdown fences or text outside JSON.
+`;
+
+  const prompt = isRkSmartAssistant ? detailedPrompt : compactPrompt;
 
   const result = await callGemini(apiKey, prompt);
   if (!result.ok) {
