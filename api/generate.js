@@ -552,7 +552,7 @@ async function callGemini(apiKey, prompt) {
           ],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 24576,
+            maxOutputTokens: isRkSmartAssistant ? 24576 : 12000,
             responseMimeType: "application/json"
           }
         }),
