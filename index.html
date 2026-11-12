@@ -367,8 +367,11 @@ async function generateApp(){
   $("resultTitle").textContent="त्रुटि";
   $("status").textContent="प्रोजेक्ट तैयार नहीं हुआ।";
 
-  $("output").textContent=
-   error.message||"अज्ञात API Error";
+  const errorMessage = error && error.message === "Failed to fetch"
+   ? "सर्वर से कनेक्शन टूट गया। इंटरनेट जाँचें और 30 सेकंड बाद दोबारा कोशिश करें। यदि बार-बार हो, तो सर्वर की सीमा या Gemini की उपलब्धता जाँचनी होगी।"
+   : (error.message || "अज्ञात API Error");
+
+  $("output").textContent=errorMessage;
 
  }finally{
 
