@@ -147,7 +147,7 @@ ${packageName}
 PACKAGE CONSISTENCY — BUILD-BLOCKING REQUIREMENT:
 - Use exactly ${packageName} for Gradle namespace, applicationId, every Java package declaration, manifest component name and every fully-qualified custom View reference in XML.
 - Never copy a package name from a different project or previous app. Do not use com.rkai.rksmartassistant unless that is the exact package printed above.
-- MainActivity.java must be located at app/src/main/java/${packageName with dots replaced by slashes}/MainActivity.java.
+- MainActivity.java must be located at app/src/main/java/${packageName.replace(/\./g, "/")}/MainActivity.java.
 - Every Activity or custom View declared in AndroidManifest.xml or referenced by a layout must resolve to a real class in this project.
 - Before returning the ZIP, compare the package declarations and fully-qualified manifest/layout references against the exact package above. Correct any mismatch before returning files.
 
