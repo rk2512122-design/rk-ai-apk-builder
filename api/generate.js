@@ -334,7 +334,7 @@ Include every required file and complete content. No Markdown fences or text out
 
   const prompt = isRkSmartAssistant ? detailedPrompt : compactPrompt;
 
-  const result = await callGemini(apiKey, prompt);
+  const result = await callGemini(apiKey, prompt, isRkSmartAssistant);
   if (!result.ok) {
     return res.status(502).json({
       error: result.error || "Gemini generation failed.",
@@ -523,7 +523,7 @@ No Markdown fences or extra text.
 }
 
 
-async function callGemini(apiKey, prompt) {
+async function callGemini(apiKey, prompt, isRkSmartAssistant = false) {
   const retryable = [408, 429, 500, 502, 503, 504];
   let lastDetails = "All available Gemini models are temporarily unavailable.";
   const deadline = Date.now() + 52000;
