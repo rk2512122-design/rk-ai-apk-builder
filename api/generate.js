@@ -719,17 +719,25 @@ function validateProject(project, res, appName, packageName) {
   normalizePackageReferences(files, packageName);
   normalizeGradlePackage(files, packageName);
 
-  // Gemini occasionally omits the root Gradle plugin file even when the prompt
-  // requires it. This file is deterministic, so restore it server-side rather
-  // than failing the whole project generation.
-  if (!files.some(file => file.path === "build.gradle")) {
-    files.push({
-      path: "build.gradle",
-      content: "plugins {\\n    id 'com.android.application' version '8.6.1' apply false\\n}\\n"
-    });
+  // Canonicalize common root-relative path variants returned by the model.
+  for (const file of files) {
+    file.path = String(file.path || "").replace(/^\.\//, "").replace(/^\/+/, "");
   }
 
-  const javaDirectory = packageName.replace(/\./g, "/");
+  // The root Android Gradle plugin file is deterministic. Always create or
+  // replace it server-side so model omissions or malformed contents cannot
+  // prevent an otherwise valid Android project from being returned.
+  const rootGradle = files.find(file => file.path === "build.gradle");
+  const rootGradleContent = `plugins {
+    id 'com.android.application' version '8.6.1' apply false
+}
+`;
+  if (rootGradle) {
+    rootGradle.content = rootGradleContent;
+  } else {
+    files.push({ path: "build.gradle", content: rootGradleContent });
+  }
+
   const required = [
     "settings.gradle",
     "build.gradle",
