@@ -738,7 +738,7 @@ function validateProject(project, res, appName, packageName) {
     files.push({ path: "build.gradle", content: rootGradleContent });
   }
 
-  const javaDirectory = packageName.replace(/\\./g, "/");
+  const javaDirectory = packageName.replace(/\./g, "/");
   const required = [
     "settings.gradle",
     "build.gradle",
