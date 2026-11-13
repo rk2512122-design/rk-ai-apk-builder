@@ -173,6 +173,20 @@ Android Project ZIP डाउनलोड करें
 
 </section>
 
+
+<section id="zipUploadSection" style="margin-top:24px;padding-top:18px;border-top:1px solid #40516e">
+<h2 style="color:#18e5ee">पहले से बना Android प्रोजेक्ट अपलोड करें</h2>
+<p class="note">अपने मोबाइल से Android Studio प्रोजेक्ट की ZIP चुनें और सीधे APK Build शुरू करें।</p>
+<label for="projectZip">Android Project ZIP</label>
+<input id="projectZip" type="file" accept=".zip,application/zip">
+<label for="uploadAppName">ऐप का नाम</label>
+<input id="uploadAppName" type="text" value="RK Smart Life Manager" maxlength="80">
+<label for="uploadPackageName">Package Name</label>
+<input id="uploadPackageName" type="text" value="com.rkai.smartlifemanager" maxlength="200">
+<button id="uploadBuildBtn" onclick="uploadExistingZip()">📦 ZIP अपलोड करके APK बनाएँ</button>
+<p class="small">Package Name app/build.gradle में दिए namespace/applicationId से मेल खाना चाहिए।</p>
+</section>
+
 <p class="note">
 नोट: ZIP एक Android Studio प्रोजेक्ट है।
 APK बनाने के लिए GitHub Build System का उपयोग होगा।
@@ -610,6 +624,59 @@ async function buildApk(){
  }
 }
 
+
+
+// Upload an existing Android Studio project ZIP and start its APK build.
+async function uploadExistingZip(){
+ const file=$("projectZip").files[0];
+ const appName=$("uploadAppName").value.trim();
+ const packageName=$("uploadPackageName").value.trim();
+ if(!file){alert("पहले ZIP फाइल चुनें।");return;}
+ if(!file.name.toLowerCase().endsWith(".zip")){alert("कृपया .zip फाइल चुनें।");return;}
+ if(file.size>4*1024*1024){alert("ZIP 4 MB से बड़ी है। अभी 4 MB तक की ZIP अपलोड करें।");return;}
+ if(!/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(packageName)){
+  alert("Package Name सही लिखें, जैसे com.rkai.smartlifemanager");return;
+ }
+ const button=$("uploadBuildBtn");
+ button.disabled=true;button.textContent="ZIP अपलोड हो रही है...";
+ $("result").style.display="block";
+ $("resultTitle").textContent="मौजूदा प्रोजेक्ट अपलोड";
+ $("status").textContent="ZIP पढ़ी जा रही है...";
+ $("output").textContent="";
+ $("workflowLink").replaceChildren();
+ $("apkDownloadBtn").hidden=true;
+ currentBuildId="";pollAttempts=0;
+ if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}
+ try{
+  const base64=await new Promise((resolve,reject)=>{
+   const reader=new FileReader();
+   reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");
+   reader.onerror=()=>reject(new Error("ZIP फाइल पढ़ने में समस्या आई।"));
+   reader.readAsDataURL(file);
+  });
+  if(!base64)throw new Error("ZIP फाइल खाली है या पढ़ी नहीं जा सकी।");
+  $("status").textContent="GitHub पर ZIP भेजी जा रही है...";
+  const response=await fetch("/api/build",{
+   method:"POST",headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({appName:appName||"Android-App",packageName,zipBase64:base64})
+  });
+  const data=await readResponse(response);
+  if(!data.buildId)throw new Error("सर्वर ने Build ID नहीं भेजी।");
+  currentBuildId=data.buildId;
+  $("status").textContent="APK Build शुरू हो गया है। कृपया प्रतीक्षा करें...";
+  $("output").textContent=(data.message||"Build शुरू हुआ।")+"\\nZIP: "+(data.zipName||"")+"\\nBuild ID: "+currentBuildId;
+  if(data.workflowUrl){
+   const link=document.createElement("a");link.href=data.workflowUrl;link.target="_blank";link.rel="noopener";
+   link.textContent="GitHub पर Build का स्टेटस देखें";$("workflowLink").replaceChildren(link);
+  }
+  checkBuildStatus();
+ }catch(error){
+  $("status").textContent="ZIP अपलोड या Build शुरू नहीं हो सका।";
+  $("output").textContent=error.message||"अज्ञात त्रुटि";
+ }finally{
+  button.disabled=false;button.textContent="📦 ZIP अपलोड करके APK बनाएँ";
+ }
+}
 
 // Check APK build status
 async function checkBuildStatus(){
