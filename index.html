@@ -199,7 +199,7 @@ ZIP डाउनलोड करें या APK Build शुरू करे�
  </div>
  <label for="chatFiles">फोटो या डॉक्यूमेंट जोड़ें</label>
  <input id="chatFiles" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.txt,.md,.csv,.json" multiple style="padding:9px">
- <p class="chatHint">PDF, JPG, PNG, WebP और TXT/MD/CSV/JSON फाइलें; कुल आकार अधिकतम 3 MB।</p><label for="chatHistory">पुरानी बातचीत</label><select id="chatHistory"><option value="">नई बातचीत</option></select><div id="chatMessages" role="log" aria-live="polite"><div class="chatBubble assistant"><small>RK AI Assistant</small>नमस्ते! बताइए, आज मैं आपकी किस काम में मदद करूँ?</div></div><div class="chatComposer"><textarea id="chatInput" rows="2" maxlength="8000" placeholder="अपना सवाल या काम यहाँ लिखें..."></textarea><button type="button" id="chatSend">भेजें</button></div><button type="button" id="chatBuildApp">🛠️ इस बातचीत से Android App बनाएं</button><p class="chatHint">बातचीत इसी ब्राउज़र/डिवाइस में सेव होगी। वेब सर्च और कोड चलाने के विकल्प जरूरत के अनुसार चुनें। बाहरी अकाउंट/ऐप में कार्रवाई के लिए अलग सुरक्षित कनेक्शन चाहिए।</p></section>
+ <p class="chatHint">PDF, JPG, PNG, WebP और TXT/MD/CSV/JSON फाइलें; कुल आकार अधिकतम 3 MB।</p><label for="chatHistory">पुरानी बातचीत</label><select id="chatHistory"><option value="">नई बातचीत</option></select><div id="chatMessages" role="log" aria-live="polite"><div class="chatBubble assistant"><small>RK AI Assistant</small>नमस्ते! बताइए, आज मैं आपकी किस काम में मदद करूँ?</div></div><div class="chatComposer"><textarea id="chatInput" rows="2" maxlength="8000" placeholder="अपना सवाल या काम यहाँ लिखें..."></textarea><button type="button" id="chatSend">भेजें</button></div><button type="button" id="chatBuildApp">🛠️ Android Project + ZIP बनाएं</button><p class="chatHint">बातचीत इसी ब्राउज़र/डिवाइस में सेव होगी। वेब सर्च और कोड चलाने के विकल्प जरूरत के अनुसार चुनें। बाहरी अकाउंट/ऐप में कार्रवाई के लिए अलग सुरक्षित कनेक्शन चाहिए।</p></section>
 <section id="appBuilderOptions" style="margin:22px 0;padding:18px;border:1px solid #304b68;border-radius:14px;background:#101d30">
 <h2 style="margin-top:0;color:#18e5ee">🧩 आसान ऐप बनाने का तरीका</h2>
 <p class="note">ऐप का नाम लिखें, Category चुनें और अपनी जरूरत के फीचर चुनें। वेबसाइट इन जानकारियों को जोड़कर Gemini को भेजेगी।</p>
@@ -1084,6 +1084,12 @@ async function copyResult(){
    const d=await readResponse(r),answer=String(d.reply||d.response||d.answer||"").trim();
    if(!answer)throw new Error("AI से खाली जवाब मिला।");
    add("assistant",answer);
+   if(/\\b(apk|android\\s*app|app|project|zip)\\b|एपीके|ऐप बनाओ|ऐप बना दो|प्रोजेक्ट बनाओ|ऐप तैयार/i.test(visibleMessage)){
+    const bubble=el("chatMessages").lastElementChild;
+    const hint=document.createElement("p");hint.textContent="आप Android Project और ZIP बनवाना चाहते हैं? नीचे दिए बटन से इस बातचीत को Project Generator में भेजें।";hint.style.fontSize="13px";
+    const action=document.createElement("button");action.type="button";action.textContent="इस बातचीत से Android Project + ZIP बनाएं";action.style.marginTop="8px";action.addEventListener("click",()=>el("chatBuildApp").click());
+    bubble.append(hint,action);
+   }
    if(Array.isArray(d.citations)&&d.citations.length){
     const last=el("chatMessages").lastElementChild,sources=document.createElement("div");sources.style.marginTop="8px";
     const heading=document.createElement("small");heading.textContent="स्रोत";sources.append(heading);
