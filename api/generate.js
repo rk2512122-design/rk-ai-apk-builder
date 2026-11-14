@@ -774,9 +774,9 @@ function validateProject(project, res, appName, packageName) {
 `;
   let launcherIcon = files.find(file => file.path === launcherIconPath);
   const hasValidLauncherIcon = launcherIcon &&
-    /<vector\\b/.test(launcherIcon.content) &&
-    /<path\\b/.test(launcherIcon.content) &&
-    /pathData\\s*=/.test(launcherIcon.content);
+    /<vector\b/.test(launcherIcon.content) &&
+    /<path\b/.test(launcherIcon.content) &&
+    /pathData\s*=/.test(launcherIcon.content);
   if (!hasValidLauncherIcon) {
     if (launcherIcon) launcherIcon.content = fallbackLauncherIcon;
     else files.push({ path: launcherIconPath, content: fallbackLauncherIcon });
@@ -784,10 +784,10 @@ function validateProject(project, res, appName, packageName) {
 
   // Always point the manifest at the guaranteed drawable resource.
   const manifestForIcon = files.find(file => file.path === "app/src/main/AndroidManifest.xml");
-  if (manifestForIcon && /<application\\b/.test(manifestForIcon.content)) {
-    if (/android:icon\\s*=\\s*["'][^"']*["']/.test(manifestForIcon.content)) {
+  if (manifestForIcon && /<application\b/.test(manifestForIcon.content)) {
+    if (/android:icon\s*=\s*["'][^"']*["']/.test(manifestForIcon.content)) {
       manifestForIcon.content = manifestForIcon.content.replace(
-        /android:icon\\s*=\\s*(["'])[^"']*\\1/,
+        /android:icon\s*=\s*(["'])[^"']*\1/,
         'android:icon="@drawable/ic_launcher"'
       );
     } else {
