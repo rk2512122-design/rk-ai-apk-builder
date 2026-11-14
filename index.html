@@ -332,97 +332,60 @@ async function readResponse(response){
 }
 
 
-function validateFiles(files,onProgress){
-
+function acceptGeminiFiles(files){
  if(!Array.isArray(files)||files.length===0)
-  throw new Error("AI ने कोई प्रोजेक्ट फाइल नहीं बनाई।");
-
- if(files.length>80)
-  throw new Error("प्रोजेक्ट में 80 से ज्यादा फाइलें हैं।");
-
+  throw new Error("Gemini ने कोई project file नहीं लौटाई।");
+ // Keep basic path and duplicate-name protection only. No Android feature,
+ // mandatory-file, Gradle, Java or manifest validation happens in the browser.
  const seen=new Set();
- let total=0;
-
- for(const file of files){
-
-  if(!file||
-     typeof file.path!=="string"||
-     typeof file.content!=="string")
-   throw new Error("AI से मिली फाइल का फॉर्मेट गलत है।");
-
-  const path=file.path.replace(/\\/g,"/").trim();
-
-  if(
-   !path||
-   path.startsWith("/")||
-   path.split("/").includes("..")||
-   !/^[a-zA-Z0-9_./-]+$/.test(path)
-  )
-   throw new Error("असुरक्षित फाइल पाथ मिला: "+path);
-
-  if(seen.has(path))
-   throw new Error("एक ही फाइल दो बार मिली: "+path);
-
+ return files.map(file=>{
+  if(!file||typeof file.path!=="string"||typeof file.content!=="string")
+   throw new Error("Gemini की file response का format सही नहीं है।");
+  const path=file.path.replace(/\\\\/g,"/").replace(/^\\.\\//,"").trim();
+  if(!path||path.startsWith("/")||path.split("/").includes("..")||!/^[a-zA-Z0-9_./-]+$/.test(path))
+   throw new Error("असुरक्षित file path मिला।");
+  if(seen.has(path))throw new Error("Duplicate file path मिला।");
   seen.add(path);
-  file.path=path;
-  if(onProgress)onProgress(seen.size,files.length);
-
-  total+=new TextEncoder().encode(file.content).length;
- }
-
- if(total>2*1024*1024)
-  throw new Error("प्रोजेक्ट 2 MB से बड़ा है।");
-
- const required=[
-  "settings.gradle",
-  "app/build.gradle",
-  "app/src/main/AndroidManifest.xml"
- ];
-
- const missing=required.filter(path=>!seen.has(path));
-
- if(missing.length)
-  throw new Error(
-   "जरूरी Android फाइलें गायब हैं: "+missing.join(", ")
-  );
-
- return files;
+  return {path,content:file.content};
+ });
 }
-
 
 // Generate Android project
 async function generateApp(){
  const idea=$("idea").value.trim();
  if(!idea){alert("पहले अपना ऐप आइडिया लिखें।");return;}
- const button=$("generateBtn");button.disabled=true;button.textContent="AI पूरा ऐप तैयार कर रहा है...";
- $("result").style.display="block";$("resultTitle").textContent="प्रोजेक्ट जनरेशन शुरू";$("status").textContent="Gemini AI से संपर्क हो रहा है...";
+ const button=$("generateBtn");button.disabled=true;button.textContent="Gemini पूरा Android Project बना रहा है...";
+ $("result").style.display="block";$("resultTitle").textContent="Project generation शुरू";$("status").textContent="आपका Idea Gemini को भेजा जा रहा है...";
  $("output").textContent="";$("fileInfo").textContent="";$("workflowLink").innerHTML="";
  $("downloadBtn").hidden=true;$("buildBtn").hidden=true;$("apkDownloadBtn").hidden=true;
  generatedFiles=[];generatedText="";currentBuildId="";
  if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}
  generationStartedAt=Date.now();generationFinishedAt=0;$("dashTimer").textContent="00:00";$("dashFiles").textContent="प्रतीक्षा";
- dash("Gemini AI पूरा Android प्रोजेक्ट तैयार कर रहा है।","जवाब आने तक वास्तविक फाइल संख्या उपलब्ध नहीं होती।","Generating",10);
+ dash("Gemini से पूरा Android Project बनवाया जा रहा है।","Gemini का जवाब आने पर ZIP अपने आप तैयार की जा सकेगी।","Generating",10);
  if(generationTimer)clearInterval(generationTimer);generationTimer=setInterval(tickGenerationTimer,1000);tickGenerationTimer();
  try{
   const response=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idea})});
   const data=await readResponse(response);
-  if(data.status!=="completed")throw new Error("AI प्रोजेक्ट पूरा नहीं हुआ।");
-  if(!Array.isArray(data.files)||!data.files.length)throw new Error("AI ने कोई प्रोजेक्ट फाइल नहीं बनाई।");
-  $("dashFiles").textContent="0 / "+data.files.length;
-  dash("Gemini का जवाब मिल गया। फाइलों की जाँच हो रही है।","प्राप्त फाइलों को एक-एक करके validate किया जा रहा है।","Validating",65);
-  generatedFiles=validateFiles(data.files,(done,total)=>{$("dashFiles").textContent=done+" / "+total;dash("प्रोजेक्ट फाइलों की जाँच चल रही है।",done+" में से "+total+" फाइलें जाँची गईं।","Validating",65+Math.round(done/total*25));});
-  generatedPackageName=String(data.packageName||"").trim();generatedAppName=String(data.projectName||"").trim();
-  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName))throw new Error("प्रोजेक्ट का स्थायी Package Name नहीं मिला।");
+  if(data.status!=="completed")throw new Error(data.error||"Gemini Project पूरा नहीं हुआ।");
+  generatedFiles=acceptGeminiFiles(data.files);
+  generatedPackageName=String(data.packageName||"").trim();
+  generatedAppName=String(data.projectName||"").trim();
+  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName))
+   throw new Error("Gemini Project में valid Package Name नहीं मिला।");
   generatedText=JSON.stringify(data,null,2);stopGenerationTimer();
-  dash("Android प्रोजेक्ट सफलतापूर्वक तैयार और जाँच लिया गया।","कुल "+generatedFiles.length+" फाइलें तैयार हुईं। अब ZIP डाउनलोड या APK Build कर सकते हैं।","Completed",100,generatedFiles.length+" / "+generatedFiles.length);
-  $("resultTitle").textContent="Android प्रोजेक्ट तैयार है";$("status").textContent="सफलतापूर्वक फाइलें तैयार हुईं। कुल समय: "+elapsedText(generationFinishedAt-generationStartedAt);
-  $("fileInfo").textContent="कुल "+generatedFiles.length+" फाइलें तैयार हुईं।";$("output").textContent=generatedFiles.map(file=>file.path).join("\n");
+  const zipBlob=makeZip(generatedFiles);
+  if(zipBlob.size>3*1024*1024)throw new Error("बनी हुई Project ZIP 3 MB से बड़ी है।");
+  dash("Gemini की सभी मिली हुई files से ZIP तैयार है।","अब APK Build बटन दबाएँ या ZIP डाउनलोड करें।","ZIP Ready",100,generatedFiles.length+" files");
+  $("resultTitle").textContent="Android Project ZIP तैयार है";
+  $("status").textContent="Gemini की "+generatedFiles.length+" files स्वीकार कर ली गई हैं।";
+  $("fileInfo").textContent="कुल "+generatedFiles.length+" files — ZIP अपने आप तैयार है।";
+  $("output").textContent=generatedFiles.map(file=>file.path).join("\n");
   $("downloadBtn").hidden=false;$("buildBtn").hidden=false;
  }catch(error){
   stopGenerationTimer();generatedFiles=[];
-  dash("प्रोजेक्ट जनरेशन पूरा नहीं हो सका।","समय: "+elapsedText(generationFinishedAt-generationStartedAt)+" | "+(error.message||"अज्ञात त्रुटि"),"Failed",100);
-  $("resultTitle").textContent="त्रुटि";$("status").textContent="प्रोजेक्ट तैयार नहीं हुआ।";
-  $("output").textContent=error&&error.message==="Failed to fetch"?"सर्वर से कनेक्शन टूट गया। इंटरनेट जाँचें और दोबारा कोशिश करें।":(error.message||"अज्ञात API Error");
+  dash("Project ZIP तैयार नहीं हो सकी।","समय: "+elapsedText(generationFinishedAt-generationStartedAt)+" | "+(error.message||"अज्ञात त्रुटि"),"Failed",100);
+  $("resultTitle").textContent="त्रुटि";$("status").textContent="Project तैयार नहीं हुआ।";
+  $("output").textContent=error&&error.message==="Failed to fetch"?"Server से connection टूट गया। Runtime Logs में API error देखें।":(error.message||"अज्ञात API Error");
  }finally{button.disabled=false;button.textContent="AI से पूरा ऐप बनवाएँ";}
 }
 
