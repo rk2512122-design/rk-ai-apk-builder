@@ -11,7 +11,7 @@ const MAX_PROJECT_SIZE = 2 * 1024 * 1024;
 const MAX_IDEA_LENGTH = 50000;
 const DEFAULT_PACKAGE = "com.example.generatedapp";
 
-export default async function handler(req, res) {
+async function generateHandler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Only POST requests are supported." });
@@ -384,6 +384,20 @@ Include every required file and complete content. No Markdown fences or text out
   }
 
   return validateProject(result.data, res, safeAppName, packageName);
+}
+
+
+export default async function handler(req, res) {
+  try {
+    return await generateHandler(req, res);
+  } catch (error) {
+    console.error("[api/generate] Unhandled generation error:", error?.stack || error);
+    if (res.headersSent) return;
+    return res.status(500).json({
+      error: "Android Project generation failed inside the server function.",
+      details: error?.message || String(error)
+    });
+  }
 }
 
 
