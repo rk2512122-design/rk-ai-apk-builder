@@ -822,7 +822,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "RKGeneratedApp"
 include(":app")
-}
 `;
   const settingsFile = files.find(file => file.path === "settings.gradle");
   if (settingsFile) settingsFile.content = settingsContent;
@@ -842,7 +841,6 @@ include(":app")
     projectName: project.projectName || appName,
     packageName,
     fileCount: files.length,
-    featureChecklist: featureValidation.verified,
     files,
     message: "Android project files received. No feature or source verification was performed."
   });
