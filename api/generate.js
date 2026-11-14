@@ -749,6 +749,55 @@ function validateProject(project, res, appName, packageName) {
     file.path = String(file.path || "").replace(/^\.\//, "").replace(/^\/+/, "");
   }
 
+  // Supply a safe server-side launcher icon when Gemini omits or malforms it.
+  // This prevents a non-essential model omission from blocking an otherwise valid project.
+  const launcherIconPath = "app/src/main/res/drawable/ic_launcher.xml";
+  const fallbackLauncherIcon = `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#101827"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#20C4D2"
+        android:pathData="M54,15a39,39 0,1 0,0.1 0z" />
+    <path
+        android:fillColor="#101827"
+        android:pathData="M54,31a23,23 0,1 0,0.1 0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,39l5.5,10.5 11.5,1.5 -8.5,8.2 2,11.5 -10.5,-5.5 -10.5,5.5 2,-11.5 -8.5,-8.2 11.5,-1.5z" />
+</vector>
+`;
+  let launcherIcon = files.find(file => file.path === launcherIconPath);
+  const hasValidLauncherIcon = launcherIcon &&
+    /<vector\\b/.test(launcherIcon.content) &&
+    /<path\\b/.test(launcherIcon.content) &&
+    /pathData\\s*=/.test(launcherIcon.content);
+  if (!hasValidLauncherIcon) {
+    if (launcherIcon) launcherIcon.content = fallbackLauncherIcon;
+    else files.push({ path: launcherIconPath, content: fallbackLauncherIcon });
+  }
+
+  // Always point the manifest at the guaranteed drawable resource.
+  const manifestForIcon = files.find(file => file.path === "app/src/main/AndroidManifest.xml");
+  if (manifestForIcon && /<application\\b/.test(manifestForIcon.content)) {
+    if (/android:icon\\s*=\\s*["'][^"']*["']/.test(manifestForIcon.content)) {
+      manifestForIcon.content = manifestForIcon.content.replace(
+        /android:icon\\s*=\\s*(["'])[^"']*\\1/,
+        'android:icon="@drawable/ic_launcher"'
+      );
+    } else {
+      manifestForIcon.content = manifestForIcon.content.replace(
+        /<application\\b/,
+        '<application android:icon="@drawable/ic_launcher"'
+      );
+    }
+  }
+
   // The root Android Gradle plugin file is deterministic. Always create or
   // replace it server-side so model omissions or malformed contents cannot
   // prevent an otherwise valid Android project from being returned.
