@@ -2,9 +2,11 @@ export const config = { maxDuration: 60 };
 
 
 const GEMINI_MODELS = [
-  "gemini-3.8-flash",
+  // Use the same fast Flash-Lite model as the website chatbot first.
+  // Larger project output still takes longer than a short conversational reply.
   "gemini-3.5-flash-lite",
-  "gemini-3.1-flash-lite"
+  "gemini-3.1-flash-lite",
+  "gemini-3.8-flash"
 ];
 const MAX_FILES = 80;
 const MAX_PROJECT_SIZE = 2 * 1024 * 1024;
@@ -602,7 +604,7 @@ async function callGemini(apiKey, prompt, isRkSmartAssistant = false) {
             responseMimeType: "application/json"
           }
         }),
-        signal: AbortSignal.timeout(Math.min(22000, remaining - 1000))
+        signal: AbortSignal.timeout(Math.min(26000, remaining - 1000))
       });
 
       const data = await response.json().catch(() => ({}));
