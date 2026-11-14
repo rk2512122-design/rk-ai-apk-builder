@@ -1123,6 +1123,7 @@ async function copyResult(){
    if(currentProjectZip.size>3*1024*1024)throw new Error("ZIP 3 MB से बड़ी है।");
    $("idea").value=generatedAppName;updateIdeaCounter();$("result").style.display="block";
    $("resultTitle").textContent="Chatbot की files से ZIP तैयार";$("status").textContent="वेबसाइट ने Gemini को दोबारा बुलाए बिना ZIP बना दी।";
+   dash("Chatbot की files से ZIP तैयार है।","इस बातचीत से मिली "+generatedFiles.length+" files को ZIP में शामिल किया गया है।","ZIP Ready",100,generatedFiles.length+" files");
    $("fileInfo").textContent="कुल "+generatedFiles.length+" files — ZIP तैयार है।";$("output").textContent=generatedFiles.map(file=>file.path).join("\n");
    $("downloadBtn").hidden=false;$("buildBtn").hidden=false;$("apkDownloadBtn").hidden=true;$("result").scrollIntoView({behavior:"smooth",block:"center"});
    await saveProjectBackup(currentProjectZip);await saveProjectState();
