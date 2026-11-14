@@ -362,7 +362,22 @@ Include every required file and complete content. No Markdown fences or text out
 `;
 
   const basePrompt = isRkSmartAssistant ? detailedPrompt : compactPrompt;
-  const prompt = basePrompt + "\n\n" + "UNIVERSAL PRODUCTION ENGINEERING RULES — APPLY TO EVERY APP IDEA, REGARDLESS OF CATEGORY:\n1. Understand the complete user idea first. Identify its purpose, users, main tasks, data, offline/online needs, hardware and external-service dependencies. Do not force unrelated templates or features onto it.\n2. Prioritize a small, coherent, fully working first release over many incomplete screens. Implement the core user journey end-to-end, including validation, loading, empty, success, error, save/edit/delete and Back/cancel states where relevant.\n3. Every visible button, menu, tab, switch, form, search field, list action and navigation item must have a real listener and working behavior. Never create decorative controls, fake statistics, hard-coded success, fake live data or TODO/placeholder implementations.\n4. For hardware features, check device capability and runtime permissions, handle unsupported devices and denied permissions, observe lifecycle state, and release hardware resources safely.\n5. For network features, use HTTPS, background executors, timeouts, response-code and JSON validation, loading/retry/error UI, and never block the main thread. Never embed API keys, passwords, tokens or secrets in the APK.\n6. Request only permissions genuinely needed. Persist user-created data locally when appropriate and recover safely from empty, malformed or older stored data.\n7. Java only; no Kotlin. Use Android Gradle Plugin 8.6.1, compileSdk 35, minSdk 24, targetSdk 35 and Java 17. Keep namespace, applicationId, Java packages, source paths and manifest component names consistent with the exact package supplied.\n8. Include every required Gradle file, manifest, launcher Activity, launcher icon, resource and referenced class. Check imports, class names, XML IDs, layouts, drawables, strings, colors, styles, menus and manifest references all resolve.\n9. Use only real Android APIs and dependencies with valid artifact coordinates and versions. Do not invent libraries, methods, permissions or resource identifiers. Guard APIs newer than minSdk 24 with SDK checks or compatible alternatives.\n10. Keep Activity startup lightweight. Do not do blocking network, database, file, bitmap or hardware work on the UI thread. Handle lifecycle, configuration changes, Back navigation and cleanup appropriately.\n11. Design for the requested app category rather than reusing one generic dashboard. Use responsive layouts, dp/sp, readable contrast, accessible labels, touch targets around 48dp, scrollable content and correct status/navigation/keyboard insets.\n12. Before returning JSON, review the full project: all required files exist once; package declarations match source paths; Java braces/strings/comments are balanced; classes/imports/resources/manifest references resolve; Gradle configuration is correct; and every requested core feature has a real implementation.\n13. Never claim the project was compiled or run unless an actual build/test tool did so. Return complete file contents, no snippets or explanatory prose outside the required JSON object.";
+  const featureVerificationInstructions = `
+
+MANDATORY IDEA FEATURE CHECKLIST — DO NOT SKIP:
+A. Read the entire USER IDEA and extract EVERY explicitly requested feature/capability, including each mode, control, setting, screen, hardware action, data display, timer, color choice and workflow. Do not reduce a multi-feature app to a single demo button.
+B. Implement each extracted feature in the actual app. A label, decorative button, placeholder, hard-coded display or description is NOT an implementation.
+C. For each feature, provide both:
+   - UI evidence: the exact file path and a short exact code/XML snippet that creates its visible control/screen.
+   - behavior evidence: the exact file path and a short exact code snippet that performs the real action/state/data/hardware/network operation.
+D. The evidence snippets must be copied verbatim from the returned files, at least 20 characters, not invented descriptions. Use Java/XML/resource files that actually exist.
+E. Return a "featureChecklist" array in the top-level JSON alongside "projectName" and "files". Each item must use this shape:
+   {"feature":"short name matching the user's requirement","status":"implemented","uiEvidence":{"path":"relative/path","snippet":"exact source substring"},"behaviorEvidence":{"path":"relative/path","snippet":"exact source substring"}}
+F. Include every requested feature exactly once (or split distinct requested modes/actions into separate checklist items). Do not mark a feature implemented unless its complete usable behavior is present. If a feature cannot be implemented due to device/API/backend limitations, implement a clear truthful unavailable state and mark status "blocked" with a reason; do not pretend it works.
+G. Do not omit featureChecklist even for simple apps. Never add unrelated features to inflate the checklist.
+H. Before returning JSON, cross-check the checklist against the actual complete files. The UI and behavior snippets must be exact substrings of their cited files.
+`;
+  const prompt = basePrompt + "\n\n" + featureVerificationInstructions + "\n\n" + "UNIVERSAL PRODUCTION ENGINEERING RULES — APPLY TO EVERY APP IDEA, REGARDLESS OF CATEGORY:\n1. Understand the complete user idea first. Identify its purpose, users, main tasks, data, offline/online needs, hardware and external-service dependencies. Do not force unrelated templates or features onto it.\n2. Prioritize a small, coherent, fully working first release over many incomplete screens. Implement the core user journey end-to-end, including validation, loading, empty, success, error, save/edit/delete and Back/cancel states where relevant.\n3. Every visible button, menu, tab, switch, form, search field, list action and navigation item must have a real listener and working behavior. Never create decorative controls, fake statistics, hard-coded success, fake live data or TODO/placeholder implementations.\n4. For hardware features, check device capability and runtime permissions, handle unsupported devices and denied permissions, observe lifecycle state, and release hardware resources safely.\n5. For network features, use HTTPS, background executors, timeouts, response-code and JSON validation, loading/retry/error UI, and never block the main thread. Never embed API keys, passwords, tokens or secrets in the APK.\n6. Request only permissions genuinely needed. Persist user-created data locally when appropriate and recover safely from empty, malformed or older stored data.\n7. Java only; no Kotlin. Use Android Gradle Plugin 8.6.1, compileSdk 35, minSdk 24, targetSdk 35 and Java 17. Keep namespace, applicationId, Java packages, source paths and manifest component names consistent with the exact package supplied.\n8. Include every required Gradle file, manifest, launcher Activity, launcher icon, resource and referenced class. Check imports, class names, XML IDs, layouts, drawables, strings, colors, styles, menus and manifest references all resolve.\n9. Use only real Android APIs and dependencies with valid artifact coordinates and versions. Do not invent libraries, methods, permissions or resource identifiers. Guard APIs newer than minSdk 24 with SDK checks or compatible alternatives.\n10. Keep Activity startup lightweight. Do not do blocking network, database, file, bitmap or hardware work on the UI thread. Handle lifecycle, configuration changes, Back navigation and cleanup appropriately.\n11. Design for the requested app category rather than reusing one generic dashboard. Use responsive layouts, dp/sp, readable contrast, accessible labels, touch targets around 48dp, scrollable content and correct status/navigation/keyboard insets.\n12. Before returning JSON, review the full project: all required files exist once; package declarations match source paths; Java braces/strings/comments are balanced; classes/imports/resources/manifest references resolve; Gradle configuration is correct; and every requested core feature has a real implementation.\n13. Never claim the project was compiled or run unless an actual build/test tool did so. Return complete file contents, no snippets or explanatory prose outside the required JSON object.";
 
   const result = await callGemini(apiKey, prompt, isRkSmartAssistant);
   if (!result.ok) {
@@ -419,6 +434,15 @@ async function handleRepair(req, res, apiKey, body) {
 
     seen.add(path);
     files.push({ path, content: file.content });
+  }
+
+  const featureValidation = validateFeatureChecklist(project, files);
+  if (!featureValidation.ok) {
+    return res.status(422).json({
+      error: featureValidation.error,
+      missingFeatures: featureValidation.missingFeatures,
+      hint: "Gemini must implement every requested feature and return exact UI and behavior source evidence. No ZIP was created."
+    });
   }
 
   const totalSize = files.reduce(
@@ -677,6 +701,56 @@ function parseJson(output) {
   return null;
 }
 
+
+function validateFeatureChecklist(project, files) {
+  const checklist = project?.featureChecklist;
+  if (!Array.isArray(checklist) || checklist.length === 0) {
+    return { ok: false, error: "Gemini did not return the required feature checklist.", missingFeatures: ["featureChecklist"] };
+  }
+
+  const byPath = new Map(files.map(file => [file.path, file.content]));
+  const seen = new Set();
+  const missingFeatures = [];
+  const verified = [];
+
+  for (const item of checklist) {
+    const feature = String(item?.feature || "").trim();
+    if (!feature || seen.has(feature.toLowerCase())) {
+      missingFeatures.push(feature || "Unnamed or duplicate feature");
+      continue;
+    }
+    seen.add(feature.toLowerCase());
+
+    if (item.status !== "implemented") {
+      missingFeatures.push(feature + (item.reason ? ": " + item.reason : ": not implemented"));
+      continue;
+    }
+
+    const checkEvidence = evidence => {
+      const path = String(evidence?.path || "");
+      const snippet = String(evidence?.snippet || "").trim();
+      const source = byPath.get(path);
+      return Boolean(source && snippet.length >= 20 && source.includes(snippet));
+    };
+
+    if (!checkEvidence(item.uiEvidence) || !checkEvidence(item.behaviorEvidence)) {
+      missingFeatures.push(feature + ": UI/behavior evidence is missing or does not match the actual source file");
+      continue;
+    }
+
+    verified.push({
+      feature,
+      uiFile: item.uiEvidence.path,
+      behaviorFile: item.behaviorEvidence.path
+    });
+  }
+
+  if (missingFeatures.length) {
+    return { ok: false, error: "One or more requested app features could not be verified in the generated source files.", missingFeatures };
+  }
+
+  return { ok: true, verified };
+}
 
 function validateProject(project, res, appName, packageName) {
   if (
