@@ -716,8 +716,8 @@ function validateProject(project, res, appName, packageName) {
   // Use the package returned in the Gradle files for build identity when present.
   const gradle = files.find(file => /(^|\/)app\/build\.gradle(?:\.kts)?$/i.test(file.path));
   const gradleText = gradle?.content || "";
-  const namespaceMatch = gradleText.match(/\\bnamespace\\s*(?:=\\s*)?["']([^"']+)["']/);
-  const applicationIdMatch = gradleText.match(/\\bapplicationId\\s*(?:=\\s*)?["']([^"']+)["']/);
+  const namespaceMatch = gradleText.match(/\bnamespace\s*(?:=\s*)?["']([^"']+)["']/);
+  const applicationIdMatch = gradleText.match(/\bapplicationId\s*(?:=\s*)?["']([^"']+)["']/);
   const detectedPackage = namespaceMatch?.[1] || applicationIdMatch?.[1] || packageName;
   const finalPackageName = isValidPackage(detectedPackage) ? detectedPackage : packageName;
 
