@@ -174,17 +174,21 @@ Android Project ZIP डाउनलोड करें
 </section>
 
 
-<section id="zipUploadSection" style="margin-top:24px;padding-top:18px;border-top:1px solid #40516e">
-<h2 style="color:#18e5ee">पहले से बना Android प्रोजेक्ट अपलोड करें</h2>
-<p class="note">अपने मोबाइल से Android Studio प्रोजेक्ट की ZIP चुनें और सीधे APK Build शुरू करें।</p>
-<label for="projectZip">Android Project ZIP</label>
-<input id="projectZip" type="file" accept=".zip,application/zip">
+<section id="zipUploadSection" style="margin-top:28px;padding:20px 0 4px;border-top:1px solid #40516e">
+<h2 style="color:#18e5ee">📦 अपनी ZIP फ़ाइल से APK बनाएँ</h2>
+<p class="note">मोबाइल या किसी भी फ़ोल्डर में रखी Android प्रोजेक्ट ZIP यहाँ चुनें। AI वाला पुराना ऐप बनाने का विकल्प ऊपर मौजूद रहेगा।</p>
+<label for="projectZip" style="display:block;border:2px dashed #18bfc9;border-radius:14px;padding:24px 14px;text-align:center;background:#0b1728;cursor:pointer">
+<span style="font-size:22px">⬆️ ZIP फ़ाइल यहाँ चुनें</span>
+<span style="display:block;font-size:13px;font-weight:normal;color:#c3d0e4;margin-top:8px">टैप करके फ़ोन के Downloads, Documents या किसी दूसरे फ़ोल्डर से .zip चुनें</span>
+<span id="zipFileName" style="display:block;color:#57e39b;margin-top:12px;font-size:13px">अभी कोई फ़ाइल नहीं चुनी गई</span>
+</label>
+<input id="projectZip" type="file" accept=".zip,application/zip" style="position:absolute;left:-9999px;width:1px;height:1px" onchange="showSelectedZip(this.files[0])">
 <label for="uploadAppName">ऐप का नाम</label>
-<input id="uploadAppName" type="text" value="RK Smart Life Manager" maxlength="80">
-<label for="uploadPackageName">Package Name</label>
-<input id="uploadPackageName" type="text" value="com.rkai.smartlifemanager" maxlength="200">
-<button id="uploadBuildBtn" onclick="uploadExistingZip()">📦 ZIP अपलोड करके APK बनाएँ</button>
-<p class="small">Package Name app/build.gradle में दिए namespace/applicationId से मेल खाना चाहिए।</p>
+<input id="uploadAppName" type="text" value="" placeholder="उदाहरण: RK Smart Life Manager" maxlength="80">
+<label for="uploadPackageName">Android Package Name</label>
+<input id="uploadPackageName" type="text" value="" placeholder="उदाहरण: com.rkai.smartlifemanager" maxlength="200">
+<button id="uploadBuildBtn" onclick="uploadExistingZip()">🚀 चुनी हुई ZIP से APK Build शुरू करें</button>
+<p class="small">ZIP में पूरा Android Studio प्रोजेक्ट होना चाहिए। Package Name को ZIP के app/build.gradle में मौजूद namespace और applicationId से बिल्कुल मिलाएँ। अभी अधिकतम ZIP आकार 4 MB है।</p>
 </section>
 
 <p class="note">
@@ -625,6 +629,31 @@ async function buildApk(){
 }
 
 
+
+// Display the chosen ZIP filename and infer a friendly app name.
+function showSelectedZip(file){
+ if(!file)return;
+ $("zipFileName").textContent="चुनी गई फ़ाइल: "+file.name+" ("+(file.size/1024/1024).toFixed(2)+" MB)";
+ if(!$("uploadAppName").value.trim()){
+  $("uploadAppName").value=file.name.replace(/\\.zip$/i,"").replace(/[-_]+/g," ");
+ }
+}
+
+// Allow dropping a ZIP onto the upload area as well as browsing folders.
+document.addEventListener("DOMContentLoaded",()=>{
+ const input=$("projectZip");
+ const label=input&&input.previousElementSibling;
+ if(!label)return;
+ label.addEventListener("dragover",event=>{event.preventDefault();label.style.background="#123047";});
+ label.addEventListener("dragleave",()=>{label.style.background="#0b1728";});
+ label.addEventListener("drop",event=>{
+  event.preventDefault();label.style.background="#0b1728";
+  const file=event.dataTransfer&&event.dataTransfer.files&&event.dataTransfer.files[0];
+  if(!file)return;
+  if(!file.name.toLowerCase().endsWith(".zip")){alert("कृपया .zip फ़ाइल ही चुनें।");return;}
+  const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;showSelectedZip(file);
+ });
+});
 
 // Upload an existing Android Studio project ZIP and start its APK build.
 async function uploadExistingZip(){
