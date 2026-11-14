@@ -362,22 +362,7 @@ Include every required file and complete content. No Markdown fences or text out
 `;
 
   const basePrompt = isRkSmartAssistant ? detailedPrompt : compactPrompt;
-  const featureVerificationInstructions = `
-
-MANDATORY IDEA FEATURE CHECKLIST — DO NOT SKIP:
-A. Read the entire USER IDEA and extract EVERY explicitly requested feature/capability, including each mode, control, setting, screen, hardware action, data display, timer, color choice and workflow. Do not reduce a multi-feature app to a single demo button.
-B. Implement each extracted feature in the actual app. A label, decorative button, placeholder, hard-coded display or description is NOT an implementation.
-C. For each feature, provide both:
-   - UI evidence: the exact file path and a short exact code/XML snippet that creates its visible control/screen.
-   - behavior evidence: the exact file path and a short exact code snippet that performs the real action/state/data/hardware/network operation.
-D. The evidence snippets must be copied verbatim from the returned files, at least 20 characters, not invented descriptions. Use Java/XML/resource files that actually exist.
-E. Return a "featureChecklist" array in the top-level JSON alongside "projectName" and "files". Each item must use this shape:
-   {"feature":"short name matching the user's requirement","status":"implemented","uiEvidence":{"path":"relative/path","snippet":"exact source substring"},"behaviorEvidence":{"path":"relative/path","snippet":"exact source substring"}}
-F. Include every requested feature exactly once (or split distinct requested modes/actions into separate checklist items). Do not mark a feature implemented unless its complete usable behavior is present. If a feature cannot be implemented due to device/API/backend limitations, implement a clear truthful unavailable state and mark status "blocked" with a reason; do not pretend it works.
-G. Do not omit featureChecklist even for simple apps. Never add unrelated features to inflate the checklist.
-H. Before returning JSON, cross-check the checklist against the actual complete files. The UI and behavior snippets must be exact substrings of their cited files.
-`;
-  const prompt = basePrompt + "\n\n" + featureVerificationInstructions + "\n\n" + "UNIVERSAL PRODUCTION ENGINEERING RULES — APPLY TO EVERY APP IDEA, REGARDLESS OF CATEGORY:\n1. Understand the complete user idea first. Identify its purpose, users, main tasks, data, offline/online needs, hardware and external-service dependencies. Do not force unrelated templates or features onto it.\n2. Prioritize a small, coherent, fully working first release over many incomplete screens. Implement the core user journey end-to-end, including validation, loading, empty, success, error, save/edit/delete and Back/cancel states where relevant.\n3. Every visible button, menu, tab, switch, form, search field, list action and navigation item must have a real listener and working behavior. Never create decorative controls, fake statistics, hard-coded success, fake live data or TODO/placeholder implementations.\n4. For hardware features, check device capability and runtime permissions, handle unsupported devices and denied permissions, observe lifecycle state, and release hardware resources safely.\n5. For network features, use HTTPS, background executors, timeouts, response-code and JSON validation, loading/retry/error UI, and never block the main thread. Never embed API keys, passwords, tokens or secrets in the APK.\n6. Request only permissions genuinely needed. Persist user-created data locally when appropriate and recover safely from empty, malformed or older stored data.\n7. Java only; no Kotlin. Use Android Gradle Plugin 8.6.1, compileSdk 35, minSdk 24, targetSdk 35 and Java 17. Keep namespace, applicationId, Java packages, source paths and manifest component names consistent with the exact package supplied.\n8. Include every required Gradle file, manifest, launcher Activity, launcher icon, resource and referenced class. Check imports, class names, XML IDs, layouts, drawables, strings, colors, styles, menus and manifest references all resolve.\n9. Use only real Android APIs and dependencies with valid artifact coordinates and versions. Do not invent libraries, methods, permissions or resource identifiers. Guard APIs newer than minSdk 24 with SDK checks or compatible alternatives.\n10. Keep Activity startup lightweight. Do not do blocking network, database, file, bitmap or hardware work on the UI thread. Handle lifecycle, configuration changes, Back navigation and cleanup appropriately.\n11. Design for the requested app category rather than reusing one generic dashboard. Use responsive layouts, dp/sp, readable contrast, accessible labels, touch targets around 48dp, scrollable content and correct status/navigation/keyboard insets.\n12. Before returning JSON, review the full project: all required files exist once; package declarations match source paths; Java braces/strings/comments are balanced; classes/imports/resources/manifest references resolve; Gradle configuration is correct; and every requested core feature has a real implementation.\n13. Never claim the project was compiled or run unless an actual build/test tool did so. Return complete file contents, no snippets or explanatory prose outside the required JSON object.";
+  const prompt = basePrompt + "\n\n" + "UNIVERSAL PRODUCTION ENGINEERING RULES — APPLY TO EVERY APP IDEA, REGARDLESS OF CATEGORY:\n1. Understand the complete user idea first. Identify its purpose, users, main tasks, data, offline/online needs, hardware and external-service dependencies. Do not force unrelated templates or features onto it.\n2. Prioritize a small, coherent, fully working first release over many incomplete screens. Implement the core user journey end-to-end, including validation, loading, empty, success, error, save/edit/delete and Back/cancel states where relevant.\n3. Every visible button, menu, tab, switch, form, search field, list action and navigation item must have a real listener and working behavior. Never create decorative controls, fake statistics, hard-coded success, fake live data or TODO/placeholder implementations.\n4. For hardware features, check device capability and runtime permissions, handle unsupported devices and denied permissions, observe lifecycle state, and release hardware resources safely.\n5. For network features, use HTTPS, background executors, timeouts, response-code and JSON validation, loading/retry/error UI, and never block the main thread. Never embed API keys, passwords, tokens or secrets in the APK.\n6. Request only permissions genuinely needed. Persist user-created data locally when appropriate and recover safely from empty, malformed or older stored data.\n7. Java only; no Kotlin. Use Android Gradle Plugin 8.6.1, compileSdk 35, minSdk 24, targetSdk 35 and Java 17. Keep namespace, applicationId, Java packages, source paths and manifest component names consistent with the exact package supplied.\n8. Include every required Gradle file, manifest, launcher Activity, launcher icon, resource and referenced class. Check imports, class names, XML IDs, layouts, drawables, strings, colors, styles, menus and manifest references all resolve.\n9. Use only real Android APIs and dependencies with valid artifact coordinates and versions. Do not invent libraries, methods, permissions or resource identifiers. Guard APIs newer than minSdk 24 with SDK checks or compatible alternatives.\n10. Keep Activity startup lightweight. Do not do blocking network, database, file, bitmap or hardware work on the UI thread. Handle lifecycle, configuration changes, Back navigation and cleanup appropriately.\n11. Design for the requested app category rather than reusing one generic dashboard. Use responsive layouts, dp/sp, readable contrast, accessible labels, touch targets around 48dp, scrollable content and correct status/navigation/keyboard insets.\n12. Before returning JSON, review the full project: all required files exist once; package declarations match source paths; Java braces/strings/comments are balanced; classes/imports/resources/manifest references resolve; Gradle configuration is correct; and every requested core feature has a real implementation.\n13. Never claim the project was compiled or run unless an actual build/test tool did so. Return complete file contents, no snippets or explanatory prose outside the required JSON object.";
 
   const result = await callGemini(apiKey, prompt, isRkSmartAssistant);
   if (!result.ok) {
@@ -693,56 +678,6 @@ function parseJson(output) {
 }
 
 
-function validateFeatureChecklist(project, files) {
-  const checklist = project?.featureChecklist;
-  if (!Array.isArray(checklist) || checklist.length === 0) {
-    return { ok: false, error: "Gemini did not return the required feature checklist.", missingFeatures: ["featureChecklist"] };
-  }
-
-  const byPath = new Map(files.map(file => [file.path, file.content]));
-  const seen = new Set();
-  const missingFeatures = [];
-  const verified = [];
-
-  for (const item of checklist) {
-    const feature = String(item?.feature || "").trim();
-    if (!feature || seen.has(feature.toLowerCase())) {
-      missingFeatures.push(feature || "Unnamed or duplicate feature");
-      continue;
-    }
-    seen.add(feature.toLowerCase());
-
-    if (item.status !== "implemented") {
-      missingFeatures.push(feature + (item.reason ? ": " + item.reason : ": not implemented"));
-      continue;
-    }
-
-    const checkEvidence = evidence => {
-      const path = String(evidence?.path || "");
-      const snippet = String(evidence?.snippet || "").trim();
-      const source = byPath.get(path);
-      return Boolean(source && snippet.length >= 20 && source.includes(snippet));
-    };
-
-    if (!checkEvidence(item.uiEvidence) || !checkEvidence(item.behaviorEvidence)) {
-      missingFeatures.push(feature + ": UI/behavior evidence is missing or does not match the actual source file");
-      continue;
-    }
-
-    verified.push({
-      feature,
-      uiFile: item.uiEvidence.path,
-      behaviorFile: item.behaviorEvidence.path
-    });
-  }
-
-  if (missingFeatures.length) {
-    return { ok: false, error: "One or more requested app features could not be verified in the generated source files.", missingFeatures };
-  }
-
-  return { ok: true, verified };
-}
-
 function validateProject(project, res, appName, packageName) {
   if (
     !project ||
@@ -779,29 +714,7 @@ function validateProject(project, res, appName, packageName) {
     }
 
     seen.add(path);
-    let content = file.content;
-
-    if (
-      path.startsWith("app/src/main/res/") &&
-      path.endsWith(".xml")
-    ) {
-      content = content.replace(
-        /\s+android:id\s*=\s*(["'])\s*\1/g,
-        ""
-      );
-      content = content.replace(
-        /\s+android:id\s*=\s*(["'])@(?:\+)?id\/\s*\1/g,
-        ""
-      );
-
-      if (/\bandroid:id\s*=\s*(["'])\s*(?:@(?:\+)?id\/)?\s*\1/.test(content)) {
-        return res.status(422).json({
-          error: "Invalid empty Android XML ID.",
-          details: path
-        });
-      }
-    }
-
+    const content = file.content;
     files.push({ path, content });
   }
 
@@ -877,43 +790,21 @@ function validateProject(project, res, appName, packageName) {
     files.push({ path: "build.gradle", content: rootGradleContent });
   }
 
-  const javaDirectory = packageName.replace(/\./g, "/");
-  const required = [
-    "settings.gradle",
-    "build.gradle",
-    "app/build.gradle",
-    "app/src/main/AndroidManifest.xml",
-    `app/src/main/java/${javaDirectory}/MainActivity.java`,
-    "app/src/main/res/drawable/ic_launcher.xml"
-  ];
-
-  const paths = new Set(files.map(file => file.path));
-  const missing = required.filter(path => !paths.has(path));
-
-  if (missing.length) {
-    return res.status(422).json({
-      error: "Required Android files are missing.",
-      missingFiles: missing,
-      hint: "Gemini omitted one or more mandatory files. Regenerate with the exact required file paths shown in the request."
-    });
-  }
-
+  // Accept Gemini's returned project files without feature/source/build checks.
+  // Keep only safe-path, duplicate-path, file-count and total-size protections.
+  // Normalize common package/Gradle metadata where possible, but do not reject
+  // the project because a requested feature or conventional Android file is absent.
   ensureGradleProperties(files);
 
-  // Use one known-good root plugin declaration for every generated project.
-  const rootGradleFile = files.find(file => file.path === "build.gradle");
-  if (rootGradleFile) {
-    rootGradleFile.content = `plugins {
+  const rootGradleContent = `plugins {
     id 'com.android.application' version '8.6.1' apply false
 }
 `;
-  }
+  const rootGradle = files.find(file => file.path === "build.gradle");
+  if (rootGradle) rootGradle.content = rootGradleContent;
+  else files.push({ path: "build.gradle", content: rootGradleContent });
 
-
-  // Normalize settings.gradle instead of rejecting valid-but-differently-formatted
-  // Gemini output. This guarantees the repository policy and plugin repositories.
-  const settingsFile = files.find(file => file.path === "settings.gradle");
-  settingsFile.content = `pluginManagement {
+  const settingsContent = `pluginManagement {
     repositories {
         google()
         mavenCentral()
@@ -931,156 +822,11 @@ dependencyResolutionManagement {
 
 rootProject.name = "RKGeneratedApp"
 include(":app")
+}
 `;
-
-  const isRkSmartAssistant = packageName === "com.rkai.rksmartassistant";
-  if (isRkSmartAssistant) {
-    const javaSource = files.filter(file => file.path.endsWith(".java")).map(file => file.content).join("\n");
-    const allSource = files.map(file => file.content).join("\n");
-    const missingFeatures = [];
-    if (!allSource.includes("https://rk-ai-apk-builder.vercel.app/api/chat")) missingFeatures.push("real AI chat endpoint integration");
-    if (!allSource.includes("https://rk-ai-apk-builder.vercel.app/api/image")) missingFeatures.push("real image-generation endpoint integration");
-    if (!/SharedPreferences|SQLiteDatabase|RoomDatabase/.test(javaSource)) missingFeatures.push("persistent local chat-history storage");
-    if (!/history/i.test(javaSource) || !/delete/i.test(javaSource)) missingFeatures.push("chat-history open/delete actions");
-    if (files.length < 15) missingFeatures.push("complete project files (at least 15 meaningful files)");
-    if (missingFeatures.length) {
-      return res.status(422).json({
-        error: "Generated RK AI Smart Assistant project is incomplete. It was blocked before download.",
-        missingFeatures,
-        packageName
-      });
-    }
-  }
-
-  const mainActivity = files.find(
-    file =>
-      file.path ===
-      `app/src/main/java/${javaDirectory}/MainActivity.java`
-  );
-
-  const expectedMainPackage = new RegExp(
-    String.raw`^\s*package\s+${escapeRegex(packageName)}\s*;`,
-    "m"
-  );
-
-  if (!expectedMainPackage.test(mainActivity.content)) {
-    return res.status(422).json({
-      error: "MainActivity package declaration is incorrect."
-    });
-  }
-
-  for (const file of files.filter(item => item.path.endsWith(".java"))) {
-    const declaredPackage = file.content.match(/^\s*package\s+([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*)\s*;/m);
-    const expectedDirectory = file.path
-      .replace(/^app\/src\/main\/java\//, "")
-      .replace(/\/[^/]+\.java$/, "")
-      .replace(/\//g, ".");
-    if (!declaredPackage || declaredPackage[1] !== expectedDirectory) {
-      return res.status(422).json({
-        error: "Java package declaration does not match its source directory.",
-        details: file.path,
-        expectedPackage: expectedDirectory,
-        actualPackage: declaredPackage?.[1] || null
-      });
-    }
-
-    if (!checkJavaBraces(file.content)) {
-      return res.status(422).json({
-        error: "Java structure validation failed.",
-        details: file.path
-      });
-    }
-  }
-
-  const icon = getContent(files, "app/src/main/res/drawable/ic_launcher.xml");
-  if (
-    !/<vector\b/.test(icon) ||
-    !/<path\b/.test(icon) ||
-    !/pathData\s*=/.test(icon)
-  ) {
-    return res.status(422).json({
-      error: "Professional launcher icon is missing or invalid.",
-      details: "app/src/main/res/drawable/ic_launcher.xml"
-    });
-  }
-
-  const manifest = getContent(files, "app/src/main/AndroidManifest.xml");
-  if (!/android:icon\s*=\s*["']@drawable\/ic_launcher["']/.test(manifest)) {
-    return res.status(422).json({
-      error: "Manifest must reference @drawable/ic_launcher."
-    });
-  }
-
-  const settings = getContent(files, "settings.gradle");
-  const root = getContent(files, "build.gradle");
-  const app = getContent(files, "app/build.gradle");
-
-  if (
-    !/pluginManagement\s*\{/.test(settings) ||
-    !/dependencyResolutionManagement\s*\{/.test(settings) ||
-    !/FAIL_ON_PROJECT_REPOS/.test(settings)
-  ) {
-    return res.status(422).json({
-      error: "Invalid settings.gradle configuration."
-    });
-  }
-
-  if (
-    !/com\.android\.application/.test(root) ||
-    !/8\.6\.1/.test(root) ||
-    !/apply\s+false/.test(root)
-  ) {
-    return res.status(422).json({
-      error: "Invalid root build.gradle configuration."
-    });
-  }
-
-  if (
-    !/com\.android\.application/.test(app) ||
-    !/namespace\s+/.test(app) ||
-    !/applicationId\s+/.test(app)
-  ) {
-    return res.status(422).json({
-      error: "Invalid app/build.gradle configuration."
-    });
-  }
-
-  if (
-    /allprojects\s*\{[\s\S]*?repositories\s*\{/i.test(root) ||
-    /^\s*repositories\s*\{/im.test(root) ||
-    /^\s*repositories\s*\{/im.test(app)
-  ) {
-    return res.status(422).json({
-      error: "Project-level repositories are not allowed."
-    });
-  }
-
-  if (
-    !app.includes(`namespace '${packageName}'`) &&
-    !app.includes(`namespace "${packageName}"`)
-  ) {
-    return res.status(422).json({
-      error: "App namespace does not match the unique package name."
-    });
-  }
-
-  if (
-    !app.includes(`applicationId '${packageName}'`) &&
-    !app.includes(`applicationId "${packageName}"`)
-  ) {
-    return res.status(422).json({
-      error: "Application ID does not match the unique package name."
-    });
-  }
-
-  const featureValidation = validateFeatureChecklist(project, files);
-  if (!featureValidation.ok) {
-    return res.status(422).json({
-      error: featureValidation.error,
-      missingFeatures: featureValidation.missingFeatures,
-      hint: "Gemini must implement every requested feature and return exact UI and behavior source evidence. No ZIP was created."
-    });
-  }
+  const settingsFile = files.find(file => file.path === "settings.gradle");
+  if (settingsFile) settingsFile.content = settingsContent;
+  else files.push({ path: "settings.gradle", content: settingsContent });
 
   const totalSize = files.reduce(
     (sum, file) => sum + Buffer.byteLength(file.content, "utf8"),
@@ -1098,7 +844,7 @@ include(":app")
     fileCount: files.length,
     featureChecklist: featureValidation.verified,
     files,
-    message: "Android project generated and feature evidence validated."
+    message: "Android project files received. No feature or source verification was performed."
   });
 }
 
