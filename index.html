@@ -192,7 +192,14 @@ a{
 ZIP डाउनलोड करें या APK Build शुरू करें।
 </p>
 
-<section id="assistantChat" aria-label="RK AI Universal Assistant"><div class="chatHeader"><h2>🤖 RK AI Universal Assistant</h2><div class="chatActions"><button type="button" id="newChatBtn">＋ नई चैट</button><button type="button" id="deleteChatBtn">चैट हटाएँ</button></div></div><p class="note">किसी भी विषय पर अपनी भाषा में खुलकर पूछें—जानकारी, पढ़ाई, लिखना, आइडिया, कोडिंग, समस्या का हल या Android ऐप।</p><label for="chatHistory">पुरानी बातचीत</label><select id="chatHistory"><option value="">नई बातचीत</option></select><div id="chatMessages" role="log" aria-live="polite"><div class="chatBubble assistant"><small>RK AI Assistant</small>नमस्ते! बताइए, आज मैं आपकी किस काम में मदद करूँ?</div></div><div class="chatComposer"><textarea id="chatInput" rows="2" maxlength="8000" placeholder="अपना सवाल या काम यहाँ लिखें..."></textarea><button type="button" id="chatSend">भेजें</button></div><button type="button" id="chatBuildApp">🛠️ इस बातचीत से Android App बनाएं</button><p class="chatHint">बातचीत इसी ब्राउज़र/डिवाइस में सेव होगी। AI जवाब के लिए इंटरनेट जरूरी है। यह चैट अभी अपने आप वेब ब्राउज़ या बाहरी ऐप में कार्रवाई नहीं करती।</p></section>
+<section id="assistantChat" aria-label="RK AI Universal Assistant"><div class="chatHeader"><h2>🤖 RK AI Universal Assistant</h2><div class="chatActions"><button type="button" id="newChatBtn">＋ नई चैट</button><button type="button" id="deleteChatBtn">चैट हटाएँ</button></div></div><p class="note">किसी भी विषय पर पूछें। जरूरत होने पर वेब सर्च, गणना/कोड चलाना और फोटो/PDF/टेक्स्ट फाइल समझना भी चुनें।</p>
+ <div class="chatActions" style="margin:10px 0">
+  <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:normal"><input id="chatWebSearch" type="checkbox" style="width:18px;height:18px;margin:0"> लाइव वेब सर्च</label>
+  <label style="display:flex;align-items:center;gap:6px;margin:0;font-weight:normal"><input id="chatCodeExecution" type="checkbox" style="width:18px;height:18px;margin:0"> गणना / कोड चलाएँ</label>
+ </div>
+ <label for="chatFiles">फोटो या डॉक्यूमेंट जोड़ें</label>
+ <input id="chatFiles" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.txt,.md,.csv,.json" multiple style="padding:9px">
+ <p class="chatHint">PDF, JPG, PNG, WebP और TXT/MD/CSV/JSON फाइलें; कुल आकार अधिकतम 3 MB।</p><label for="chatHistory">पुरानी बातचीत</label><select id="chatHistory"><option value="">नई बातचीत</option></select><div id="chatMessages" role="log" aria-live="polite"><div class="chatBubble assistant"><small>RK AI Assistant</small>नमस्ते! बताइए, आज मैं आपकी किस काम में मदद करूँ?</div></div><div class="chatComposer"><textarea id="chatInput" rows="2" maxlength="8000" placeholder="अपना सवाल या काम यहाँ लिखें..."></textarea><button type="button" id="chatSend">भेजें</button></div><button type="button" id="chatBuildApp">🛠️ इस बातचीत से Android App बनाएं</button><p class="chatHint">बातचीत इसी ब्राउज़र/डिवाइस में सेव होगी। वेब सर्च और कोड चलाने के विकल्प जरूरत के अनुसार चुनें। बाहरी अकाउंट/ऐप में कार्रवाई के लिए अलग सुरक्षित कनेक्शन चाहिए।</p></section>
 <section id="appBuilderOptions" style="margin:22px 0;padding:18px;border:1px solid #304b68;border-radius:14px;background:#101d30">
 <h2 style="margin-top:0;color:#18e5ee">🧩 आसान ऐप बनाने का तरीका</h2>
 <p class="note">ऐप का नाम लिखें, Category चुनें और अपनी जरूरत के फीचर चुनें। वेबसाइट इन जानकारियों को जोड़कर Gemini को भेजेगी।</p>
@@ -1053,7 +1060,39 @@ async function copyResult(){
  function renderMessages(){const w=el("chatMessages");w.replaceChildren();const c=active();if(!c||!c.messages.length){const b=document.createElement("div");b.className="chatBubble assistant";b.textContent="नमस्ते! बताइए, आज मैं आपकी किस काम में मदद करूँ?";w.append(b);return}c.messages.forEach(m=>{const b=document.createElement("div");b.className="chatBubble "+(m.role==="user"?"user":"assistant");const who=document.createElement("small");who.textContent=m.role==="user"?"आप":"RK AI Assistant";const body=document.createElement("div");body.textContent=m.text;b.append(who,body);w.append(b)});w.scrollTop=w.scrollHeight}
  function renderAll(){renderHistory();renderMessages()}
  function add(role,text){const c=active();if(!c)return;c.messages.push({role,text,at:Date.now()});c.updatedAt=Date.now();if(role==="user"&&c.title==="नई बातचीत")c.title=text.replace(/\s+/g," ").slice(0,42)+(text.length>42?"…":"");save();renderAll()}
- async function send(){const input=el("chatInput"),message=input.value.trim();if(!message||busy)return;if(!active())createChat(false);input.value="";add("user",message);busy=true;el("chatSend").disabled=true;el("chatSend").textContent="...";const c=active(),history=c.messages.slice(0,-1).slice(-24).map(m=>({role:m.role,content:m.text}));const pending=document.createElement("div");pending.className="chatBubble assistant";pending.textContent="सोच रहा हूँ...";el("chatMessages").append(pending);el("chatMessages").scrollTop=el("chatMessages").scrollHeight;try{const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,history})});const d=await readResponse(r),answer=String(d.reply||d.response||d.answer||"").trim();if(!answer)throw new Error("AI से खाली जवाब मिला।");add("assistant",answer)}catch(e){pending.textContent="जवाब नहीं मिल सका: "+(e.message||"कृपया दोबारा कोशिश करें।")}finally{busy=false;el("chatSend").disabled=false;el("chatSend").textContent="भेजें";input.focus()}}
+ async function send(){
+  const input=el("chatInput"),message=input.value.trim(),selected=[...el("chatFiles").files];
+  if((!message&&!selected.length)||busy)return;
+  if(!active())createChat(false);
+  const visibleMessage=message||(selected.length?"कृपया संलग्न फाइल देखें।":"");
+  input.value="";
+  add("user",visibleMessage+(selected.length?" [संलग्न: "+selected.map(f=>f.name).join(", ")+"]":""));
+  busy=true;el("chatSend").disabled=true;el("chatSend").textContent="...";
+  const c=active(),history=c.messages.slice(0,-1).slice(-20).map(m=>({role:m.role,content:m.text}));
+  const pending=document.createElement("div");pending.className="chatBubble assistant";pending.textContent="फाइल जाँची जा रही है और जवाब तैयार हो रहा है...";
+  el("chatMessages").append(pending);el("chatMessages").scrollTop=el("chatMessages").scrollHeight;
+  try{
+   const attachments=[];let total=0;
+   for(const file of selected){
+    total+=file.size;if(total>3*1024*1024)throw new Error("कुल फाइल आकार 3 MB से कम रखें।");
+    const item={name:file.name,mimeType:file.type};
+    if(["text/plain","text/markdown","text/csv","application/json"].includes(file.type)||/\.(txt|md|csv|json)$/i.test(file.name)){item.text=await file.text();}
+    else{item.data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");reader.onerror=()=>reject(new Error("फाइल पढ़ी नहीं जा सकी।"));reader.readAsDataURL(file);});}
+    attachments.push(item);
+   }
+   const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:visibleMessage||"संलग्न फाइल का विश्लेषण करें।",history,attachments,webSearch:el("chatWebSearch").checked,codeExecution:el("chatCodeExecution").checked})});
+   const d=await readResponse(r),answer=String(d.reply||d.response||d.answer||"").trim();
+   if(!answer)throw new Error("AI से खाली जवाब मिला।");
+   add("assistant",answer);
+   if(Array.isArray(d.citations)&&d.citations.length){
+    const last=el("chatMessages").lastElementChild,sources=document.createElement("div");sources.style.marginTop="8px";
+    const heading=document.createElement("small");heading.textContent="स्रोत";sources.append(heading);
+    d.citations.slice(0,8).forEach(c=>{const a=document.createElement("a");a.href=c.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=c.title||c.url;a.style.display="block";a.style.color="#6ce7ef";a.style.fontSize="12px";sources.append(a);});
+    last.append(sources);
+   }
+  }catch(e){pending.textContent="जवाब नहीं मिल सका: "+(e.message||"कृपया दोबारा कोशिश करें।");}
+  finally{el("chatFiles").value="";busy=false;el("chatSend").disabled=false;el("chatSend").textContent="भेजें";input.focus();}
+ }
  el("chatSend").addEventListener("click",send);el("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
  el("newChatBtn").addEventListener("click",()=>createChat());el("chatHistory").addEventListener("change",e=>{activeId=e.target.value;renderMessages()});
  el("deleteChatBtn").addEventListener("click",()=>{if(!active()||!confirm("क्या आप इस बातचीत को हटाना चाहते हैं?"))return;chats=chats.filter(c=>c.id!==activeId);if(!chats.length)createChat(false);else activeId=chats[0].id;save();renderAll()});
