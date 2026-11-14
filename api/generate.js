@@ -368,7 +368,8 @@ Include every required file and complete content. No Markdown fences or text out
   const featureCompleteRules = "14. FEATURE-COMPLETE IMPLEMENTATION IS THE PRIORITY: carefully extract every feature, sub-feature, setting and behavior explicitly requested in the user's idea before designing the app. Create a private implementation checklist while coding. Each requested item must have both a visible usable UI (where applicable) and a real Java behavior. Do not silently omit, merge away, simplify or replace requested features. Do not output a tiny demo when the user requested a multi-feature app.\n15. For every requested feature, implement its full user flow, including start/stop or enable/disable actions, state updates, input validation, unsupported-device handling and cleanup where applicable. Keep related controls connected to the same underlying state. A control must never be decorative.\n16. Before returning the JSON, perform a second-pass self-review against the original user idea: list every requested feature internally and inspect the actual Java/XML code for its UI, listener and behavior. If any feature is missing, incomplete, disconnected or only represented by a label/button, write or repair the required code and review again. Do not include fake checkmarks or claim a feature is implemented merely because its title appears in the UI.\n17. Ensure the main screen exposes all important requested features in a clear, scrollable mobile layout. Do not hide core features in unimplemented menus. Add the necessary Java classes, XML layouts, values, drawables, permissions, receivers or services when the requested behavior needs them; include every created file in the returned JSON.\n18. For toggle controls, use one authoritative state source and make the control genuinely reversible. On each tap, read/update the actual underlying device or app state, then update label, icon, color and status together. Handle API failures without leaving the UI showing a false state. Reconcile UI state on resume and hardware callbacks when available.\n19. For flashlight/torch apps: implement the main power button as a true ON/OFF toggle, not an ON-only action. Use CameraManager.setTorchMode(cameraId, enabled) with a rear camera that has flash; register TorchCallback and keep the button label and status synchronized with the real torch state. On every OFF tap call setTorchMode(cameraId, false); handle camera-in-use, missing flash and SecurityException gracefully. Stop SOS/Strobe/timer work before manual OFF, and ensure all scheduled flashing stops on OFF, screen exit and lifecycle cleanup. Use a Handler on the main Looper or another lifecycle-safe scheduler; do not run endless loops or block the UI thread.\n20. For flashlight brightness, use CameraManager.getCameraCharacteristics and FLASH_INFO_STRENGTH_MAXIMUM_LEVEL / setTorchStrengthLevel only on Android 13 (API 33)+ when supported; check the camera's capability and catch unsupported/API errors. On older or unsupported phones, clearly explain that hardware LED brightness cannot be changed rather than pretending the slider works. Do not substitute screen brightness for LED brightness unless the user explicitly asks for screen light.\n21. For SOS and Strobe, use cancellable timed patterns with a single shared torch controller so modes cannot fight each other. Stop the current mode before starting another; provide reliable Stop controls; restore a known OFF state on cancellation, timer completion and lifecycle exit. Strobe speed changes must affect the actual interval.\n22. For screen-light colors, use a dedicated full-screen Activity or view with actual selected background colors, keep the screen awake only while active, and provide a clear exit/OFF action. Battery percentage and temperature must come from Android battery APIs/Intent extras and display unavailable state if temperature is not reported; never hard-code values. Auto-Off Timer must cancel previous timers when reset/cancelled and switch the real torch OFF at expiry.\n23. When the user requests multiple themes, implement working theme selection that updates the whole app consistently and persists the selection if practical. Do not merely draw radio buttons without changing the app theme.\n24. Do not treat the count of returned files as a measure of completeness. Return as many complete files as the implementation genuinely needs, within the response limits. A six-file project is acceptable only if it truly implements the complete requested app; do not compress away required features to meet a small file count.";
   const prompt = basePrompt + "\n\n" + universalRules + "\n" + featureCompleteRules;
 
-  const result = await callGemini(apiKey, prompt, isRkSmartAssistant);
+  // Reserve server time for one automatic completeness repair before returning a ZIP.
+  const result = await callGemini(apiKey, prompt, isRkSmartAssistant, 34000);
   if (!result.ok) {
     return res.status(502).json({
       error: result.error || "Gemini generation failed.",
@@ -376,7 +377,66 @@ Include every required file and complete content. No Markdown fences or text out
     });
   }
 
-  return validateProject(result.data, res, safeAppName, packageName, safeFeatures);
+  const capture = { code: 200, payload: null, status(code) { this.code = code; return this; }, json(payload) { this.payload = payload; return payload; } };
+  validateProject(result.data, capture, safeAppName, packageName, safeFeatures);
+  if (capture.code === 200) {
+    return res.status(200).json({ ...capture.payload, automaticRepair: { attempted: false, passed: true } });
+  }
+
+  const initialIssues = capture.payload?.validation || {};
+  const repairPrompt = `
+You are repairing an incomplete Android Java project generated from a user's app idea.
+Return ONLY valid JSON with {"files":[{"path":"relative/path","content":"complete file content"}],"message":"short summary"}.
+USER'S COMPLETE APP IDEA:
+${safeFeatures}
+EXACT PACKAGE: ${packageName}
+VALIDATION FAILURES:
+${JSON.stringify(initialIssues)}
+ERROR:
+${capture.payload?.error || "Project incomplete"}
+EXISTING FILES:
+${JSON.stringify(result.data.files)}
+RULES:
+- Return complete contents for every missing or corrected file, not snippets.
+- Preserve all working existing features and the user's requested design.
+- Include missing mandatory Gradle, manifest, Java, styles/themes and launcher icon files.
+- Fix every listed missing feature in actual Java behavior and UI; do not merely add keywords or labels.
+- Java only; AGP 8.6.1; compileSdk 35; minSdk 24; targetSdk 35; Java 17.
+- Keep namespace, applicationId, Java packages and paths exactly consistent with ${packageName}.
+- Do not return unchanged files. Do not invent APIs or fake functionality.
+`;
+  const repair = await callGemini(apiKey, repairPrompt, false, 22000);
+  if (!repair.ok || !Array.isArray(repair.data?.files) || !repair.data.files.length) {
+    return res.status(422).json({
+      error: "वेबसाइट ने अधूरा प्रोजेक्ट अपने आप ठीक करने की कोशिश की, लेकिन Gemini से पूरा सुधार नहीं मिला। ZIP नहीं बनाई गई।",
+      validation: initialIssues,
+      automaticRepair: { attempted: true, passed: false },
+      details: repair.details || repair.data?.message || "Automatic repair did not return corrected files."
+    });
+  }
+
+  const merged = new Map(result.data.files.map(file => [file.path, file]));
+  for (const file of repair.data.files) {
+    if (!file || typeof file.path !== "string" || typeof file.content !== "string") continue;
+    const safe = safePath(file.path);
+    if (safe) merged.set(safe, { path: safe, content: file.content });
+  }
+  const repairedProject = { ...result.data, files: [...merged.values()] };
+  const finalCapture = { code: 200, payload: null, status(code) { this.code = code; return this; }, json(payload) { this.payload = payload; return payload; } };
+  validateProject(repairedProject, finalCapture, safeAppName, packageName, safeFeatures);
+  if (finalCapture.code !== 200) {
+    return res.status(422).json({
+      error: "वेबसाइट ने अपने आप सुधार किया, लेकिन अंतिम जाँच में कुछ कमियाँ अभी भी मिलीं। सुरक्षित रूप से ZIP नहीं बनाई गई।",
+      validation: finalCapture.payload?.validation || initialIssues,
+      automaticRepair: { attempted: true, passed: false },
+      message: "आपको फाइलें हाथ से ठीक करने की जरूरत नहीं; कृपया कुछ समय बाद दोबारा प्रयास करें।"
+    });
+  }
+  return res.status(200).json({
+    ...finalCapture.payload,
+    automaticRepair: { attempted: true, passed: true, changedFiles: repair.data.files.length },
+    message: "Project की जाँच और automatic repair पूरी हुई। APK build अभी अलग से verify होगा।"
+  });
 }
 
 
@@ -571,10 +631,10 @@ No Markdown fences or extra text.
 }
 
 
-async function callGemini(apiKey, prompt, isRkSmartAssistant = false) {
+async function callGemini(apiKey, prompt, isRkSmartAssistant = false, budgetMs = 52000) {
   const retryable = [408, 429, 500, 502, 503, 504];
   let lastDetails = "All available Gemini models are temporarily unavailable.";
-  const deadline = Date.now() + 52000;
+  const deadline = Date.now() + Math.max(5000, Math.min(52000, budgetMs));
 
   // Keep the whole request within the Vercel function time budget.
   // Try each configured model once rather than repeating long calls.
@@ -604,7 +664,7 @@ async function callGemini(apiKey, prompt, isRkSmartAssistant = false) {
             responseMimeType: "application/json"
           }
         }),
-        signal: AbortSignal.timeout(Math.min(26000, remaining - 1000))
+        signal: AbortSignal.timeout(Math.min(18000, remaining - 1000))
       });
 
       const data = await response.json().catch(() => ({}));
