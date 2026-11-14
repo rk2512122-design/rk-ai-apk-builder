@@ -1065,7 +1065,7 @@ async function copyResult(){
   if((!message&&!selected.length)||busy)return;
   if(!active())createChat(false);
   const visibleMessage=message||(selected.length?"कृपया संलग्न फाइल देखें।":"");
-  const projectMode=/\b(apk|android\s*app|android\s*project)\b|एपीके|एंड्रॉयड ऐप|एंड्रॉइड ऐप|ऐप बनाओ|ऐप बना दो|प्रोजेक्ट बनाओ|प्रोजेक्ट तैयार/i.test(visibleMessage);
+  const projectMode=/\b(apk|android\s*(?:app|project)|(?:build|create|make|generate)\s+(?:an?\s+)?(?:android\s+)?app|flashlight\s+app|app\s+project)\b|एपीके|एंड्रॉयड ऐप|एंड्रॉइड ऐप|ऐप बनाओ|ऐप बना दो|ऐप तैयार|प्रोजेक्ट बनाओ|प्रोजेक्ट तैयार/i.test(visibleMessage);
   input.value="";
   add("user",visibleMessage+(selected.length?" [संलग्न: "+selected.map(f=>f.name).join(", ")+"]":""));
   busy=true;el("chatSend").disabled=true;el("chatSend").textContent="...";
@@ -1085,7 +1085,7 @@ async function copyResult(){
    const d=await readResponse(r),answer=String(d.reply||d.response||d.answer||"").trim();
    if(!answer)throw new Error("AI से खाली जवाब मिला।");
    add("assistant",answer);
-   if(projectMode){
+   if(projectMode||/\[\[FILE:\s*[^\]]+\]\]/i.test(answer)){
     const chat=active();chat.projectRaw=answer;save();
     const bubble=el("chatMessages").lastElementChild;
     const hint=document.createElement("p");hint.textContent="प्रोजेक्ट फाइलें एक ही बार में तैयार की गई हैं। अब वेबसाइट इन्हें ZIP में assemble करेगी; Gemini को दोबारा नहीं भेजा जाएगा।";hint.style.fontSize="13px";
@@ -1105,9 +1105,11 @@ async function copyResult(){
  el("exportChatBtn").addEventListener("click",()=>{const c=active();if(!c||!c.messages.length){alert("इस बातचीत में अभी कोई संदेश नहीं है।");return}const text="# "+(c.title||"RK AI Chat")+"\\n\\n"+c.messages.map(m=>(m.role==="user"?"## आप":"## RK AI Assistant")+"\\n\\n"+m.text).join("\\n\\n---\\n\\n");const blob=new Blob([text],{type:"text/markdown;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=(c.title||"rk-ai-chat").replace(/[^a-z0-9_-]+/gi,"_")+".md";a.click();setTimeout(()=>URL.revokeObjectURL(url),10000)});el("newChatBtn").addEventListener("click",()=>createChat());el("chatHistory").addEventListener("change",e=>{activeId=e.target.value;renderMessages()});
  el("deleteChatBtn").addEventListener("click",()=>{if(!active()||!confirm("क्या आप इस बातचीत को हटाना चाहते हैं?"))return;chats=chats.filter(c=>c.id!==activeId);if(!chats.length)createChat(false);else activeId=chats[0].id;save();renderAll()});
  el("chatBuildApp").addEventListener("click",async()=>{
-  const c=active();if(!c||!c.projectRaw){alert("इस बातचीत में तैयार project files नहीं मिलीं। ऐप बनाने का अनुरोध दोबारा भेजें।");return;}
+  const c=active();if(!c){alert("पहले वह बातचीत चुनें जिसमें Android Project का जवाब आया था।");return;}
   try{
-   const raw=c.projectRaw;
+   const raw=c.projectRaw||[...c.messages].reverse().find(m=>m.role==="assistant"&&/\[\[FILE:\s*[^\]]+\]\]/i.test(m.text))?.text||"";
+   if(!raw){alert("इस चैट के जवाब में ZIP बनाने योग्य [[FILE: path]] फाइल ब्लॉक नहीं मिले। Chatbot में Android ऐप बनाने का अनुरोध फिर से भेजें और फाइलों वाला जवाब पूरा आने दें।");return;}
+   c.projectRaw=raw;save();
    const re=/\[\[FILE:\s*([^\]]+)\]\]\s*([\s\S]*?)\s*\[\[END FILE\]\]/g;
    const files=[];let match;
    while((match=re.exec(raw))!==null)files.push({path:match[1].trim(),content:match[2].replace(/^\s*\n/,"").replace(/\n\s*$/,"")});
