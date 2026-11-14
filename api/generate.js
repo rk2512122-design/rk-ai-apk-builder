@@ -1059,11 +1059,11 @@ function normalizeJavaFiles(files, packageName) {
   const javaFiles = files.filter(file => file.path.startsWith(javaRoot) && file.path.endsWith(".java"));
   const otherFiles = files.filter(file => !javaFiles.includes(file));
   const mainFile = javaFiles.find(file => file.path.split("/").pop() === "MainActivity.java");
-  const mainMatch = mainFile?.content.match(/^\\s*package\\s+([a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*)*)\\s*;/m);
+  const mainMatch = mainFile?.content.match(/^\s*package\s+([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*)\s*;/m);
   const oldBasePackage = mainMatch?.[1] || DEFAULT_PACKAGE;
   const packageMap = new Map();
   for (const file of javaFiles) {
-    const match = file.content.match(/^\\s*package\\s+([a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*)*)\\s*;/m);
+    const match = file.content.match(/^\s*package\s+([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*)\s*;/m);
     const oldPackage = match?.[1] || oldBasePackage;
     let newPackage = oldPackage;
     if (file === mainFile || oldPackage === oldBasePackage || oldPackage === DEFAULT_PACKAGE) newPackage = packageName;
@@ -1071,9 +1071,9 @@ function normalizeJavaFiles(files, packageName) {
     else if (oldPackage.startsWith(DEFAULT_PACKAGE + ".")) newPackage = packageName + oldPackage.slice(DEFAULT_PACKAGE.length);
     packageMap.set(oldPackage, newPackage);
   }
-  const escapeRegExp = value => value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+  const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   for (const file of [...otherFiles, ...javaFiles]) {
-    if (!/\\.(java|xml|gradle|properties)$/.test(file.path)) continue;
+    if (!/\.(java|xml|gradle|properties)$/.test(file.path)) continue;
     for (const [from, to] of packageMap) {
       if (from !== to) file.content = file.content.replace(new RegExp(escapeRegExp(from), "g"), to);
     }
@@ -1081,11 +1081,11 @@ function normalizeJavaFiles(files, packageName) {
   const normalized = [];
   const seen = new Set();
   for (const file of javaFiles) {
-    const match = file.content.match(/^\\s*package\\s+([a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*)*)\\s*;/m);
+    const match = file.content.match(/^\s*package\s+([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*)\s*;/m);
     const declaredPackage = match?.[1] || packageName;
-    if (!match) file.content = "package " + declaredPackage + ";\\n\\n" + file.content;
+    if (!match) file.content = "package " + declaredPackage + ";\n\n" + file.content;
     const filename = file.path.split("/").pop();
-    const newPath = javaRoot + declaredPackage.replace(/\\./g, "/") + "/" + filename;
+    const newPath = javaRoot + declaredPackage.replace(/\./g, "/") + "/" + filename;
     if (seen.has(newPath)) throw new Error("Duplicate Java source path after package normalization: " + newPath);
     seen.add(newPath);
     normalized.push({ path: newPath, content: file.content });
