@@ -142,6 +142,19 @@ button:disabled{
  font-size:13px;
 }
 
+/* Keep the form out of the way while an APK build is running. */
+body.build-running #appBuilderOptions,
+body.build-running label[for="idea"],
+body.build-running #idea,
+body.build-running #ideaCounter,
+body.build-running p.note,
+body.build-running #generateBtn,
+body.build-running #zipUploadSection,
+body.build-running main.card>p.small{display:none!important}
+#showAppDetailsBtn{display:none;margin:12px 0;background:#314766;color:#fff}
+body.build-running #showAppDetailsBtn{display:block}
+@media(max-width:760px){body.build-running #showAppDetailsBtn{margin:8px 0}}
+
 /* Live project generation dashboard */
 #progressDashboard{display:none;margin-top:18px;padding:18px;border:1px solid #31516b;border-radius:16px;background:linear-gradient(145deg,#101d32,#142b42);box-shadow:0 12px 30px rgba(0,0,0,.22)}
 #progressDashboard.active{display:block}
@@ -220,6 +233,8 @@ ZIP डाउनलोड करें या APK Build शुरू करे�
 <button id="generateBtn" onclick="generateApp()">
 AI से पूरा ऐप बनवाएँ
 </button>
+
+<button id="showAppDetailsBtn" type="button" onclick="toggleAppDetails()">ऐप विवरण दिखाएँ</button>
 
 <section id="result">
 
@@ -304,6 +319,15 @@ function elapsedText(ms){const s=Math.max(0,Math.floor(ms/1000)),h=Math.floor(s/
 function tickGenerationTimer(){if(generationStartedAt)$("dashTimer").textContent=elapsedText((generationFinishedAt||Date.now())-generationStartedAt);}
 function dash(stage,detail,pill,percent,files){$("progressDashboard").classList.add("active");$("dashStage").textContent=stage;$("dashDetail").textContent=detail;$("dashPill").textContent=pill;$("dashBar").style.width=percent+"%";if(files!==undefined)$("dashFiles").textContent=files;}
 function stopGenerationTimer(){generationFinishedAt=Date.now();tickGenerationTimer();if(generationTimer){clearInterval(generationTimer);generationTimer=null;}}
+function setBuildMode(active){
+ document.body.classList.toggle("build-running",!!active);
+ const toggle=$("showAppDetailsBtn");
+ if(toggle)toggle.textContent=active?"ऐप विवरण दिखाएँ":"ऐप विवरण छिपाएँ";
+}
+function toggleAppDetails(){
+ const active=document.body.classList.contains("build-running");
+ setBuildMode(!active);
+}
 
 const $=id=>document.getElementById(id);
 
@@ -606,6 +630,7 @@ async function buildApk(){
 
  const button=$("buildBtn");
 
+ setBuildMode(true);
  button.disabled=true;
  button.textContent="APK Build शुरू हो रहा है...";
 
@@ -784,6 +809,7 @@ async function uploadExistingZip(){
   alert("Package Name सही लिखें, जैसे com.rkai.smartlifemanager");return;
  }
  const button=$("uploadBuildBtn");
+ setBuildMode(true);
  button.disabled=true;button.textContent="ZIP अपलोड हो रही है...";
  $("result").style.display="block";
  $("resultTitle").textContent="मौजूदा प्रोजेक्ट अपलोड";
