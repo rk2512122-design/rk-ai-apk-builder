@@ -8,6 +8,7 @@ const GEMINI_MODELS = [
 ];
 const MAX_FILES = 80;
 const MAX_PROJECT_SIZE = 2 * 1024 * 1024;
+const MAX_IDEA_LENGTH = 50000;
 const DEFAULT_PACKAGE = "com.example.generatedapp";
 
 export default async function handler(req, res) {
@@ -33,6 +34,14 @@ export default async function handler(req, res) {
 
   // Accept a single natural-language idea as the primary user input.
   const idea = String(body.idea || body.prompt || "").trim();
+  if (idea.length > MAX_IDEA_LENGTH) {
+    return res.status(413).json({
+      error: `आपका ऐप आइडिया ${MAX_IDEA_LENGTH.toLocaleString("en-IN")} कैरेक्टर से बड़ा है। कृपया इसे छोटा करें या मुख्य आवश्यकताएँ अलग-अलग भागों में लिखें।`,
+      maxCharacters: MAX_IDEA_LENGTH,
+      receivedCharacters: idea.length
+    });
+  }
+
   const rawFeatures = String(body.features || idea || "").trim();
   const inferredName = deriveAppName(idea || rawFeatures);
   const inferredType = inferAppType(idea || rawFeatures);
@@ -49,7 +58,8 @@ export default async function handler(req, res) {
 
   const safeAppName = appName.slice(0, 100);
   const safeAppType = appType.slice(0, 150);
-  const safeFeatures = features.slice(0, 5000);
+  // Preserve the complete user idea; never silently truncate requirements.
+  const safeFeatures = features;
 
   // Keep package identity deterministic for the same app name across generations.
   // Different app names receive different package names; later builds of the same
