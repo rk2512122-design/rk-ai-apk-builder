@@ -436,15 +436,6 @@ async function handleRepair(req, res, apiKey, body) {
     files.push({ path, content: file.content });
   }
 
-  const featureValidation = validateFeatureChecklist(project, files);
-  if (!featureValidation.ok) {
-    return res.status(422).json({
-      error: featureValidation.error,
-      missingFeatures: featureValidation.missingFeatures,
-      hint: "Gemini must implement every requested feature and return exact UI and behavior source evidence. No ZIP was created."
-    });
-  }
-
   const totalSize = files.reduce(
     (sum, file) => sum + Buffer.byteLength(file.content, "utf8"),
     0
@@ -1079,6 +1070,15 @@ include(":app")
   ) {
     return res.status(422).json({
       error: "Application ID does not match the unique package name."
+    });
+  }
+
+  const featureValidation = validateFeatureChecklist(project, files);
+  if (!featureValidation.ok) {
+    return res.status(422).json({
+      error: featureValidation.error,
+      missingFeatures: featureValidation.missingFeatures,
+      hint: "Gemini must implement every requested feature and return exact UI and behavior source evidence. No ZIP was created."
     });
   }
 
