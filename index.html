@@ -11,19 +11,68 @@
 
 body{
  margin:0;
- padding:16px;
+ padding:24px;
  font-family:Arial,sans-serif;
- background:#0b1220;
+ background:radial-gradient(ellipse at top,#13243a 0%,#0b1220 55%);
  color:white;
+ min-height:100vh;
 }
 
 .card{
- max-width:700px;
- margin:16px auto;
- padding:22px;
- background:#172238;
- border-radius:16px;
+ width:min(100%,1240px);
+ margin:12px auto;
+ padding:30px;
+ background:linear-gradient(155deg,#17263d 0%,#142238 100%);
+ border-radius:20px;
  border:1px solid #30415d;
+ box-shadow:0 22px 60px rgba(0,0,0,.28);
+}
+
+#idea{
+ min-height:250px;
+ resize:vertical;
+ line-height:1.55;
+}
+
+#zipUploadSection{
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ column-gap:22px;
+ align-items:start;
+}
+
+#zipUploadSection h2,
+#zipUploadSection>p.note,
+#zipUploadSection>button,
+#zipUploadSection>p.small{
+ grid-column:1/-1;
+}
+
+#zipUploadSection label[for="projectZip"]{
+ grid-column:1/-1;
+}
+
+#zipUploadSection label[for="uploadAppName"],
+#zipUploadSection label[for="uploadPackageName"]{
+ margin-top:14px;
+}
+
+#zipUploadSection #uploadAppName,
+#zipUploadSection #uploadPackageName{
+ margin-top:8px;
+}
+
+@media(min-width:1100px){
+ .card{padding:34px 42px}
+ #progressDashboard{padding:22px}
+ .dashMetrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:760px){
+ body{padding:10px}
+ .card{padding:18px;margin:6px auto;border-radius:14px}
+ #idea{min-height:190px}
+ #zipUploadSection{display:block}
 }
 
 h1{text-align:center;color:#18e5ee}
