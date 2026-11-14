@@ -1,96 +1,91 @@
-const GEMINI_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
-
-const MAX_HISTORY_MESSAGES = 24;
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
+const MAX_HISTORY_MESSAGES = 20;
 const MAX_MESSAGE_LENGTH = 8000;
+const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024;
+const ALLOWED_INLINE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Only POST requests are supported." });
   }
-
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "AI service is not configured on the server." });
-  }
+  if (!apiKey) return res.status(500).json({ error: "AI service is not configured on the server." });
 
   const body = req.body || {};
-  const message = String(
-    body.message || body.prompt || body.text ||
-    (Array.isArray(body.messages) ? body.messages[body.messages.length - 1]?.content || body.messages[body.messages.length - 1]?.text : "") ||
-    ""
-  ).trim();
+  const message = String(body.message || body.prompt || body.text || "").trim();
+  if (!message) return res.status(400).json({ error: "A non-empty message is required." });
+  if (message.length > MAX_MESSAGE_LENGTH) return res.status(413).json({ error: "Message is too long." });
 
-  if (!message) {
-    return res.status(400).json({ error: "A non-empty message is required." });
-  }
-  if (message.length > MAX_MESSAGE_LENGTH) {
-    return res.status(413).json({ error: "Message is too long." });
-  }
-
-  const rawHistory = Array.isArray(body.history)
-    ? body.history
-    : Array.isArray(body.messages)
-      ? body.messages.slice(0, -1)
-      : [];
-
+  const rawHistory = Array.isArray(body.history) ? body.history : [];
   const history = rawHistory.slice(-MAX_HISTORY_MESSAGES).map(item => {
-    const roleValue = String(item?.role || item?.sender || "user").toLowerCase();
+    const roleValue = String(item?.role || "user").toLowerCase();
     const role = ["assistant", "model", "ai"].includes(roleValue) ? "model" : "user";
-    const text = String(item?.content || item?.text || item?.message || "").trim().slice(0, MAX_MESSAGE_LENGTH);
-    return text ? { role, parts: [{ text }] } : null;
+    const value = String(item?.content || item?.text || "").trim().slice(0, MAX_MESSAGE_LENGTH);
+    return value ? { role, parts: [{ text: value }] } : null;
   }).filter(Boolean);
 
-  const contents = [
-    ...history,
-    { role: "user", parts: [{ text: message }] }
-  ];
+  const parts = [{ text: message }];
+  let totalBytes = 0;
+  const attachments = Array.isArray(body.attachments) ? body.attachments.slice(0, 4) : [];
+  for (const file of attachments) {
+    const mimeType = String(file?.mimeType || "").toLowerCase();
+    const name = String(file?.name || "attachment").slice(0, 120);
+    if (typeof file?.text === "string") {
+      const text = file.text.slice(0, 60000);
+      parts.push({ text: "\n\nAttached text file (" + name + "):\n" + text });
+      totalBytes += text.length;
+      continue;
+    }
+    const data = String(file?.data || "");
+    if (!ALLOWED_INLINE_TYPES.has(mimeType)) {
+      return res.status(415).json({ error: "Unsupported attachment type: " + name + ". Use PDF, JPG, PNG, or WebP." });
+    }
+    const bytes = Math.floor(data.length * 3 / 4);
+    totalBytes += bytes;
+    if (!data || totalBytes > MAX_ATTACHMENT_BYTES) {
+      return res.status(413).json({ error: "Attachments together must be smaller than 3 MB." });
+    }
+    parts.push({ inline_data: { mime_type: mimeType, data } });
+    parts.push({ text: "The attached file is named " + name + ". Please inspect it as relevant to the user's request." });
+  }
+
+  const tools = [];
+  if (body.webSearch === true) tools.push({ google_search: {} });
+  if (body.codeExecution === true) tools.push({ code_execution: {} });
+
+  const payload = {
+    systemInstruction: {
+      parts: [{
+        text: "You are RK AI Universal Assistant, a capable general-purpose assistant. Help with explanations, learning, brainstorming, writing, editing, translation, planning, maths, coding, debugging, technology, troubleshooting and practical step-by-step tasks. Reply in the same language and script as the user's latest message; understand Hindi, Hinglish and English. Be friendly, accurate, clear and practical. Ask one focused clarification only when essential. When files or images are attached, inspect their actual contents and clearly distinguish what is visible/readable from uncertainty. When web search is enabled, use current search results for fresh facts and include source links in your answer when available. When code execution is enabled, use it for calculations or code checks where useful and report only actual results. Never claim to have accessed accounts, devices, local files or performed external actions unless actually provided. Do not invent facts, citations, tests or completed work. For Android app requests, help define requirements and guide the separate Android Project generator. Keep answers concise by default and detailed when asked."
+      }]
+    },
+    contents: [...history, { role: "user", parts }],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
+  };
+  if (tools.length) payload.tools = tools;
 
   try {
     const response = await fetch(GEMINI_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{
-            text: "You are RK AI Universal Assistant, a capable general-purpose conversational AI. Help with explanations, learning, brainstorming, writing and editing, translation, planning, mathematics, coding, debugging, technology, troubleshooting, and practical step-by-step guidance. Reply in the same language and script as the user's latest message; understand Hindi, Hinglish, and English. Be friendly, respectful, clear, and practical. Ask one focused clarification only when essential. For complex tasks, break work into actionable steps. Never claim you accessed websites, files, accounts, devices, or performed actions unless the system actually provided that capability. This chat endpoint cannot browse the live web, inspect local files, run code, or take external actions; be transparent when a request needs those capabilities or current information. Do not invent facts, citations, test results, or completed work. For Android app requests, help clarify requirements and prepare a feature specification; the RK AI APK Builder has a separate Android Project generation workflow. Keep answers concise by default but provide detail when asked."
-          }]
-        },
-        contents,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048
-        }
-      }),
-      signal: AbortSignal.timeout(45000)
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(90000)
     });
-
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const detail = data.error?.message || `Gemini API returned HTTP ${response.status}`;
+      const detail = data.error?.message || "Gemini API returned HTTP " + response.status;
       console.error("Chat Gemini request failed:", response.status, detail);
       return res.status(response.status === 429 ? 429 : 502).json({
-        error: response.status === 429
-          ? "AI service is busy. Please try again shortly."
-          : "AI service could not process the message."
+        error: response.status === 429 ? "AI service is busy. Please try again shortly." : "AI service could not process the message. " + detail.slice(0, 250)
       });
     }
-
-    const answer = (data.candidates?.[0]?.content?.parts || [])
-      .map(part => part.text || "")
-      .join("\n")
-      .trim();
-
-    if (!answer) {
-      console.error("Chat Gemini returned no text:", data.promptFeedback || data.candidates?.[0]?.finishReason);
-      return res.status(502).json({ error: "AI returned an empty response. Please try again." });
-    }
-
-    return res.status(200).json({ reply: answer, response: answer, answer });
+    const candidate = data.candidates?.[0];
+    const answer = (candidate?.content?.parts || []).map(part => part.text || "").filter(Boolean).join("\n").trim();
+    if (!answer) return res.status(502).json({ error: "AI returned an empty response. Please try again." });
+    const grounding = candidate?.groundingMetadata || {};
+    const citations = (grounding.groundingChunks || []).map(chunk => chunk.web).filter(item => item?.uri).map(item => ({ title: item.title || item.uri, url: item.uri }));
+    return res.status(200).json({ reply: answer, response: answer, answer, citations, searched: citations.length > 0 });
   } catch (error) {
     console.error("Chat endpoint error:", error);
     return res.status(504).json({ error: "Could not reach the AI service. Please try again." });
