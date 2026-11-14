@@ -177,6 +177,7 @@ a{
  color:#18e5ee;
  overflow-wrap:anywhere;
 }
+#assistantChat{margin:22px 0;padding:18px;border:1px solid #31516b;border-radius:16px;background:linear-gradient(145deg,#101d32,#142b42)}.chatHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.chatHeader h2{margin:0;color:#18e5ee}.chatActions{display:flex;gap:8px;flex-wrap:wrap}.chatActions button{width:auto;margin:0;padding:9px 12px;font-size:13px;background:#314766;color:white}#chatHistory{width:100%;margin-top:12px}#chatMessages{height:min(48vh,440px);min-height:220px;overflow:auto;padding:12px;background:#091525;border:1px solid #30415d;border-radius:12px;display:flex;flex-direction:column;gap:12px}.chatBubble{max-width:92%;padding:11px 13px;border-radius:13px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;font-size:14px}.chatBubble.user{align-self:flex-end;background:#164b59;color:#fff}.chatBubble.assistant{align-self:flex-start;background:#1c2d45;color:#eef7ff;border:1px solid #30415d}.chatBubble small{display:block;margin-bottom:5px;color:#9eb2ca;font-size:11px}.chatComposer{display:flex;gap:8px;align-items:flex-end;margin-top:10px}#chatInput{flex:1;min-width:0;min-height:54px;max-height:150px;resize:vertical;margin:0}#chatSend{width:auto;min-width:76px;margin:0;padding:14px}#chatBuildApp{background:#57e39b;margin-top:10px}.chatHint{font-size:12px;color:#aabbd2;margin:8px 0 0}@media(max-width:520px){#assistantChat{padding:12px}.chatComposer{align-items:stretch}#chatSend{min-width:64px;padding:10px}.chatActions button{flex:1}}
 </style>
 </head>
 
@@ -191,6 +192,7 @@ a{
 ZIP डाउनलोड करें या APK Build शुरू करें।
 </p>
 
+<section id="assistantChat" aria-label="RK AI Universal Assistant"><div class="chatHeader"><h2>🤖 RK AI Universal Assistant</h2><div class="chatActions"><button type="button" id="newChatBtn">＋ नई चैट</button><button type="button" id="deleteChatBtn">चैट हटाएँ</button></div></div><p class="note">किसी भी विषय पर अपनी भाषा में खुलकर पूछें—जानकारी, पढ़ाई, लिखना, आइडिया, कोडिंग, समस्या का हल या Android ऐप।</p><label for="chatHistory">पुरानी बातचीत</label><select id="chatHistory"><option value="">नई बातचीत</option></select><div id="chatMessages" role="log" aria-live="polite"><div class="chatBubble assistant"><small>RK AI Assistant</small>नमस्ते! बताइए, आज मैं आपकी किस काम में मदद करूँ?</div></div><div class="chatComposer"><textarea id="chatInput" rows="2" maxlength="8000" placeholder="अपना सवाल या काम यहाँ लिखें..."></textarea><button type="button" id="chatSend">भेजें</button></div><button type="button" id="chatBuildApp">🛠️ इस बातचीत से Android App बनाएं</button><p class="chatHint">बातचीत इसी ब्राउज़र/डिवाइस में सेव होगी। AI जवाब के लिए इंटरनेट जरूरी है। यह चैट अभी अपने आप वेब ब्राउज़ या बाहरी ऐप में कार्रवाई नहीं करती।</p></section>
 <section id="appBuilderOptions" style="margin:22px 0;padding:18px;border:1px solid #304b68;border-radius:14px;background:#101d30">
 <h2 style="margin-top:0;color:#18e5ee">🧩 आसान ऐप बनाने का तरीका</h2>
 <p class="note">ऐप का नाम लिखें, Category चुनें और अपनी जरूरत के फीचर चुनें। वेबसाइट इन जानकारियों को जोड़कर Gemini को भेजेगी।</p>
@@ -1040,6 +1042,24 @@ async function copyResult(){
  }
 }
 
+/* RK AI Universal Assistant: local multi-chat history */
+(()=>{
+ const KEY="rk_ai_universal_chats_v1";let chats=[],activeId="",busy=false;const el=id=>document.getElementById(id);
+ const makeId=()=>Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,9);
+ function save(){try{localStorage.setItem(KEY,JSON.stringify(chats.slice(0,50)))}catch(e){console.warn("Chat save failed",e)}}
+ function active(){return chats.find(c=>c.id===activeId)}
+ function createChat(render=true){const c={id:makeId(),title:"नई बातचीत",createdAt:Date.now(),updatedAt:Date.now(),messages:[]};chats.unshift(c);activeId=c.id;save();if(render)renderAll()}
+ function renderHistory(){const s=el("chatHistory"),id=activeId;s.replaceChildren();chats.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));chats.forEach(c=>{const o=document.createElement("option");o.value=c.id;o.textContent=c.title||"नई बातचीत";s.append(o)});s.value=id}
+ function renderMessages(){const w=el("chatMessages");w.replaceChildren();const c=active();if(!c||!c.messages.length){const b=document.createElement("div");b.className="chatBubble assistant";b.textContent="नमस्ते! बताइए, आज मैं आपकी किस काम में मदद करूँ?";w.append(b);return}c.messages.forEach(m=>{const b=document.createElement("div");b.className="chatBubble "+(m.role==="user"?"user":"assistant");const who=document.createElement("small");who.textContent=m.role==="user"?"आप":"RK AI Assistant";const body=document.createElement("div");body.textContent=m.text;b.append(who,body);w.append(b)});w.scrollTop=w.scrollHeight}
+ function renderAll(){renderHistory();renderMessages()}
+ function add(role,text){const c=active();if(!c)return;c.messages.push({role,text,at:Date.now()});c.updatedAt=Date.now();if(role==="user"&&c.title==="नई बातचीत")c.title=text.replace(/\\s+/g," ").slice(0,42)+(text.length>42?"…":"");save();renderAll()}
+ async function send(){const input=el("chatInput"),message=input.value.trim();if(!message||busy)return;if(!active())createChat(false);input.value="";add("user",message);busy=true;el("chatSend").disabled=true;el("chatSend").textContent="...";const c=active(),history=c.messages.slice(0,-1).slice(-24).map(m=>({role:m.role,content:m.text}));const pending=document.createElement("div");pending.className="chatBubble assistant";pending.textContent="सोच रहा हूँ...";el("chatMessages").append(pending);el("chatMessages").scrollTop=el("chatMessages").scrollHeight;try{const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message,history})});const d=await readResponse(r),answer=String(d.reply||d.response||d.answer||"").trim();if(!answer)throw new Error("AI से खाली जवाब मिला।");add("assistant",answer)}catch(e){pending.textContent="जवाब नहीं मिल सका: "+(e.message||"कृपया दोबारा कोशिश करें।")}finally{busy=false;el("chatSend").disabled=false;el("chatSend").textContent="भेजें";input.focus()}}
+ el("chatSend").addEventListener("click",send);el("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
+ el("newChatBtn").addEventListener("click",()=>createChat());el("chatHistory").addEventListener("change",e=>{activeId=e.target.value;renderMessages()});
+ el("deleteChatBtn").addEventListener("click",()=>{if(!active()||!confirm("क्या आप इस बातचीत को हटाना चाहते हैं?"))return;chats=chats.filter(c=>c.id!==activeId);if(!chats.length)createChat(false);else activeId=chats[0].id;save();renderAll()});
+ el("chatBuildApp").addEventListener("click",()=>{const c=active();if(!c||!c.messages.some(m=>m.role==="user")){alert("पहले चैट में अपनी Android ऐप की जरूरत बताइए।");return}const transcript=c.messages.map(m=>(m.role==="user"?"यूज़र: ":"AI: ")+m.text).join("\\n\\n");$("idea").value="इस बातचीत के आधार पर पूरी Android ऐप बनाएं और यूज़र की सभी आवश्यकताओं को लागू करें।\\n\\n"+transcript;updateIdeaCounter();$("idea").scrollIntoView({behavior:"smooth",block:"center"});if(confirm("बातचीत Android ऐप के निर्देशों में जोड़ दी गई है। क्या Gemini से Android Project बनवाना शुरू करें?"))generateApp()});
+ function load(){try{const v=JSON.parse(localStorage.getItem(KEY)||"[]");chats=Array.isArray(v)?v.filter(c=>c&&c.id&&Array.isArray(c.messages)):[]}catch{chats=[]}if(!chats.length)createChat(false);else activeId=chats[0].id;renderAll()}load();
+})();
 </script>
 
 </body>
