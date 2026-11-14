@@ -351,7 +351,8 @@ Return ONLY one valid JSON object:
 Include every required file and complete content. No Markdown fences or text outside JSON.
 `;
 
-  const prompt = isRkSmartAssistant ? detailedPrompt : compactPrompt;
+  const basePrompt = isRkSmartAssistant ? detailedPrompt : compactPrompt;
+  const prompt = basePrompt + "\n\n" + "UNIVERSAL PRODUCTION ENGINEERING RULES — APPLY TO EVERY APP IDEA, REGARDLESS OF CATEGORY:\n1. Understand the complete user idea first. Identify its purpose, users, main tasks, data, offline/online needs, hardware and external-service dependencies. Do not force unrelated templates or features onto it.\n2. Prioritize a small, coherent, fully working first release over many incomplete screens. Implement the core user journey end-to-end, including validation, loading, empty, success, error, save/edit/delete and Back/cancel states where relevant.\n3. Every visible button, menu, tab, switch, form, search field, list action and navigation item must have a real listener and working behavior. Never create decorative controls, fake statistics, hard-coded success, fake live data or TODO/placeholder implementations.\n4. For hardware features, check device capability and runtime permissions, handle unsupported devices and denied permissions, observe lifecycle state, and release hardware resources safely.\n5. For network features, use HTTPS, background executors, timeouts, response-code and JSON validation, loading/retry/error UI, and never block the main thread. Never embed API keys, passwords, tokens or secrets in the APK.\n6. Request only permissions genuinely needed. Persist user-created data locally when appropriate and recover safely from empty, malformed or older stored data.\n7. Java only; no Kotlin. Use Android Gradle Plugin 8.6.1, compileSdk 35, minSdk 24, targetSdk 35 and Java 17. Keep namespace, applicationId, Java packages, source paths and manifest component names consistent with the exact package supplied.\n8. Include every required Gradle file, manifest, launcher Activity, launcher icon, resource and referenced class. Check imports, class names, XML IDs, layouts, drawables, strings, colors, styles, menus and manifest references all resolve.\n9. Use only real Android APIs and dependencies with valid artifact coordinates and versions. Do not invent libraries, methods, permissions or resource identifiers. Guard APIs newer than minSdk 24 with SDK checks or compatible alternatives.\n10. Keep Activity startup lightweight. Do not do blocking network, database, file, bitmap or hardware work on the UI thread. Handle lifecycle, configuration changes, Back navigation and cleanup appropriately.\n11. Design for the requested app category rather than reusing one generic dashboard. Use responsive layouts, dp/sp, readable contrast, accessible labels, touch targets around 48dp, scrollable content and correct status/navigation/keyboard insets.\n12. Before returning JSON, review the full project: all required files exist once; package declarations match source paths; Java braces/strings/comments are balanced; classes/imports/resources/manifest references resolve; Gradle configuration is correct; and every requested core feature has a real implementation.\n13. Never claim the project was compiled or run unless an actual build/test tool did so. Return complete file contents, no snippets or explanatory prose outside the required JSON object.";
 
   const result = await callGemini(apiKey, prompt, isRkSmartAssistant);
   if (!result.ok) {
@@ -1054,65 +1055,43 @@ function isValidPackage(value) {
 
 
 function normalizeJavaFiles(files, packageName) {
-  const javaFiles = files.filter(
-    file =>
-      file.path.startsWith("app/src/main/java/") &&
-      file.path.endsWith(".java")
-  );
-
-  const otherFiles = files.filter(
-    file =>
-      !(
-        file.path.startsWith("app/src/main/java/") &&
-        file.path.endsWith(".java")
-      )
-  );
-
+  const javaRoot = "app/src/main/java/";
+  const javaFiles = files.filter(file => file.path.startsWith(javaRoot) && file.path.endsWith(".java"));
+  const otherFiles = files.filter(file => !javaFiles.includes(file));
+  const mainFile = javaFiles.find(file => file.path.split("/").pop() === "MainActivity.java");
+  const mainMatch = mainFile?.content.match(/^\\s*package\\s+([a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*)*)\\s*;/m);
+  const oldBasePackage = mainMatch?.[1] || DEFAULT_PACKAGE;
+  const packageMap = new Map();
+  for (const file of javaFiles) {
+    const match = file.content.match(/^\\s*package\\s+([a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*)*)\\s*;/m);
+    const oldPackage = match?.[1] || oldBasePackage;
+    let newPackage = oldPackage;
+    if (file === mainFile || oldPackage === oldBasePackage || oldPackage === DEFAULT_PACKAGE) newPackage = packageName;
+    else if (oldPackage.startsWith(oldBasePackage + ".")) newPackage = packageName + oldPackage.slice(oldBasePackage.length);
+    else if (oldPackage.startsWith(DEFAULT_PACKAGE + ".")) newPackage = packageName + oldPackage.slice(DEFAULT_PACKAGE.length);
+    packageMap.set(oldPackage, newPackage);
+  }
+  const escapeRegExp = value => value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+  for (const file of [...otherFiles, ...javaFiles]) {
+    if (!/\\.(java|xml|gradle|properties)$/.test(file.path)) continue;
+    for (const [from, to] of packageMap) {
+      if (from !== to) file.content = file.content.replace(new RegExp(escapeRegExp(from), "g"), to);
+    }
+  }
   const normalized = [];
   const seen = new Set();
-
   for (const file of javaFiles) {
-    let content = file.content;
-    const match = content.match(
-      /^\s*package\s+([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*)\s*;/m
-    );
-
-    let suffix = "";
-    if (match) {
-      const oldPackage = match[1];
-      if (oldPackage === DEFAULT_PACKAGE) {
-        suffix = "";
-      } else if (oldPackage.startsWith(DEFAULT_PACKAGE + ".")) {
-        suffix = oldPackage.slice(DEFAULT_PACKAGE.length);
-      } else if (oldPackage.startsWith(packageName + ".")) {
-        suffix = oldPackage.slice(packageName.length);
-      }
-    }
-
-    const newPackage = packageName + suffix;
-    if (match) {
-      content = content.replace(
-        /^\s*package\s+[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)*\s*;/m,
-        `package ${newPackage};`
-      );
-    } else {
-      content = `package ${newPackage};\n\n${content}`;
-    }
-
-    content = content.replaceAll(DEFAULT_PACKAGE, packageName);
-    const relativePackagePath = newPackage.replace(/\./g, "/");
+    const match = file.content.match(/^\\s*package\\s+([a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*)*)\\s*;/m);
+    const declaredPackage = match?.[1] || packageName;
+    if (!match) file.content = "package " + declaredPackage + ";\\n\\n" + file.content;
     const filename = file.path.split("/").pop();
-    const newPath =
-      `app/src/main/java/${relativePackagePath}/${filename}`;
-
-    if (seen.has(newPath)) continue;
+    const newPath = javaRoot + declaredPackage.replace(/\\./g, "/") + "/" + filename;
+    if (seen.has(newPath)) throw new Error("Duplicate Java source path after package normalization: " + newPath);
     seen.add(newPath);
-    normalized.push({ path: newPath, content });
+    normalized.push({ path: newPath, content: file.content });
   }
-
   files.splice(0, files.length, ...otherFiles, ...normalized);
 }
-
 
 function normalizePackageReferences(files, packageName) {
   for (const file of files) {
