@@ -763,10 +763,10 @@ function validateProject(project, res, appName, packageName) {
         android:pathData="M0,0h108v108h-108z" />
     <path
         android:fillColor="#20C4D2"
-        android:pathData="M54,15a39,39 0,1 0,0.1 0z" />
+        android:pathData="M54,15a39,39 0,1 1,0 78a39,39 0,1 1,0 -78" />
     <path
         android:fillColor="#101827"
-        android:pathData="M54,31a23,23 0,1 0,0.1 0z" />
+        android:pathData="M54,31a23,23 0,1 1,0 46a23,23 0,1 1,0 -46" />
     <path
         android:fillColor="#FFFFFF"
         android:pathData="M54,39l5.5,10.5 11.5,1.5 -8.5,8.2 2,11.5 -10.5,-5.5 -10.5,5.5 2,-11.5 -8.5,-8.2 11.5,-1.5z" />
@@ -792,7 +792,7 @@ function validateProject(project, res, appName, packageName) {
       );
     } else {
       manifestForIcon.content = manifestForIcon.content.replace(
-        /<application\\b/,
+        /<application\b/,
         '<application android:icon="@drawable/ic_launcher"'
       );
     }
