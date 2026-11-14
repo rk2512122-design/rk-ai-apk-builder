@@ -1,3 +1,5 @@
+export const config = { maxDuration: 60 };
+
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
 const MAX_HISTORY_MESSAGES = 20;
 const MAX_MESSAGE_LENGTH = 8000;
