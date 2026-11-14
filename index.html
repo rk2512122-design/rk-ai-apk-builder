@@ -634,69 +634,54 @@ async function buildApk(){
 function showSelectedZip(file){
  if(!file)return;
  $("zipFileName").textContent="चुनी गई फ़ाइल: "+file.name+" ("+(file.size/1024/1024).toFixed(2)+" MB) — Package Name खोज रहे हैं...";
- if(!$("uploadAppName").value.trim()){
-  $("uploadAppName").value=file.name.replace(/\\.zip$/i,"").replace(/[-_]+/g," ");
- }
+ $("uploadAppName").value=file.name.replace(/\.zip$/i,"").replace(/[-_]+/g," ").trim();
+ $("uploadPackageName").value="";
  detectPackageNameFromZip(file).then(packageName=>{
   if(packageName){
    $("uploadPackageName").value=packageName;
-   $("zipFileName").textContent="✓ "+file.name+" — Package Name अपने आप भर गया: "+packageName;
+   $("zipFileName").textContent="✓ "+file.name+" — Package Name: "+packageName;
   }else{
-   $("zipFileName").textContent="⚠ "+file.name+" — Package Name नहीं मिला। कृपया ZIP में app/build.gradle जाँचें।";
+   $("zipFileName").textContent="⚠ "+file.name+" चुनी गई, लेकिन Gradle में namespace/applicationId नहीं मिला।";
   }
  }).catch(error=>{
-  $("zipFileName").textContent="⚠ ZIP पढ़ी नहीं जा सकी: "+error.message+" — Package Name हाथ से भरें।";
+  $("zipFileName").textContent="⚠ "+file.name+" चुनी गई, लेकिन ZIP पढ़ने में समस्या: "+error.message;
  });
 }
 
-// Read only the Gradle metadata needed to identify the Android package.
-// Supports normal ZIP entries using either STORE or DEFLATE compression.
+// Extract Gradle package identity from a normal Android project ZIP.
 async function detectPackageNameFromZip(file){
  const bytes=await file.arrayBuffer();
- const view=new DataView(bytes);
- const u8=new Uint8Array(bytes);
- const decoder=new TextDecoder("utf-8");
+ const view=new DataView(bytes),u8=new Uint8Array(bytes),decoder=new TextDecoder("utf-8");
  let eocd=-1;
- for(let p=u8.length-22;p>=Math.max(0,u8.length-65557);p--){
-  if(view.getUint32(p,true)===0x06054b50){eocd=p;break;}
+ for(let p=Math.max(0,u8.length-65557);p<=u8.length-22;p++){
+  if(view.getUint32(p,true)===0x06054b50)eocd=p;
  }
  if(eocd<0)throw new Error("ZIP directory नहीं मिली");
- const count=view.getUint16(eocd+10,true);
- const centralOffset=view.getUint32(eocd+16,true);
+ const count=view.getUint16(eocd+10,true),centralOffset=view.getUint32(eocd+16,true);
  let pos=centralOffset;
- const candidates=[];
  for(let n=0;n<count;n++){
-  if(view.getUint32(pos,true)!==0x02014b50)break;
-  const method=view.getUint16(pos+10,true);
-  const compressedSize=view.getUint32(pos+20,true);
-  const nameLen=view.getUint16(pos+28,true);
-  const extraLen=view.getUint16(pos+30,true);
-  const commentLen=view.getUint16(pos+32,true);
+  if(pos+46>u8.length||view.getUint32(pos,true)!==0x02014b50)break;
+  const method=view.getUint16(pos+10,true),compressedSize=view.getUint32(pos+20,true);
+  const nameLen=view.getUint16(pos+28,true),extraLen=view.getUint16(pos+30,true),commentLen=view.getUint16(pos+32,true);
   const localOffset=view.getUint32(pos+42,true);
-  const name=decoder.decode(u8.slice(pos+46,pos+46+nameLen)).replace(/\\\\/g,"/");
-  if(/(^|\\/)app\\/build\\.gradle(\\.kts)?$/i.test(name)||/(^|\\/)app\\/build\\.gradle(\\.kts)?\\//i.test(name)){
-   if(view.getUint32(localOffset,true)!==0x04034b50)throw new Error("Gradle ZIP entry गलत है");
-   const localNameLen=view.getUint16(localOffset+26,true);
-   const localExtraLen=view.getUint16(localOffset+28,true);
-   const dataStart=localOffset+30+localNameLen+localExtraLen;
-   const compressed=u8.slice(dataStart,dataStart+compressedSize);
-   let data;
-   if(method===0)data=compressed;
-   else if(method===8){
-    if(typeof DecompressionStream==="undefined")throw new Error("इस ब्राउज़र में ZIP decompress सुविधा उपलब्ध नहीं है");
-    const stream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-    data=new Uint8Array(await new Response(stream).arrayBuffer());
-   }else{pos+=46+nameLen+extraLen+commentLen;continue;}
-   candidates.push({name,text:decoder.decode(data)});
-  }
+  const name=decoder.decode(u8.slice(pos+46,pos+46+nameLen)).replace(/\\/g,"/");
   pos+=46+nameLen+extraLen+commentLen;
- }
- const preferred=candidates.sort((a,b)=>a.name.split("/").length-b.name.split("/").length);
- for(const item of preferred){
-  const text=item.text;
-  const ns=text.match(/\\bnamespace\\s*(?:=\\s*)?["']([A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
-  const app=text.match(/\\bapplicationId\\s*(?:=\\s*)?["']([A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
-  if(ns&&app&&ns[1]===app[1])return ns[1];
+  if(!/(^|\/)app\/build\.gradle(\.kts)?$/i.test(name))continue;
+  if(view.getUint32(localOffset,true)!==0x04034b50)continue;
+  const localNameLen=view.getUint16(localOffset+26,true),localExtraLen=view.getUint16(localOffset+28,true);
+  const dataStart=localOffset+30+localNameLen+localExtraLen;
+  const compressed=u8.slice(dataStart,dataStart+compressedSize);
+  let data;
+  if(method===0)data=compressed;
+  else if(method===8){
+   if(typeof DecompressionStream==="undefined")throw new Error("ब्राउज़र ZIP decompress नहीं कर पा रहा");
+   const stream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+   data=new Uint8Array(await new Response(stream).arrayBuffer());
+  }else continue;
+  const gradle=decoder.decode(data);
+  const ns=gradle.match(/\bnamespace\s*(?:=\s*)?["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
+  const app=gradle.match(/\bapplicationId\s*(?:=\s*)?["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
+  if(ns&&app&&ns[1]!==app[1])throw new Error("namespace और applicationId अलग हैं");
   if(ns)return ns[1];
   if(app)return app[1];
  }
