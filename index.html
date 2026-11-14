@@ -308,6 +308,75 @@ APK बनाने के लिए GitHub Build System का उपयोग 
 <script>
 
 let generatedFiles=[];
+let currentProjectZip=null;
+const PROJECT_DB="rk-ai-apk-builder";
+function openProjectDB(){
+ return new Promise((resolve,reject)=>{
+  const request=indexedDB.open(PROJECT_DB,1);
+  request.onupgradeneeded=()=>{if(!request.result.objectStoreNames.contains("state"))request.result.createObjectStore("state");};
+  request.onsuccess=()=>resolve(request.result);
+  request.onerror=()=>reject(request.error);
+ });
+}
+async function saveProjectState(){
+ try{
+  const db=await openProjectDB();
+  await new Promise((resolve,reject)=>{
+   const tx=db.transaction("state","readwrite");
+   tx.objectStore("state").put({
+    files:generatedFiles,zip:currentProjectZip,packageName:generatedPackageName,
+    appName:generatedAppName,buildId:currentBuildId,updatedAt:Date.now()
+   },"current");
+   tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+  });
+  db.close();
+ }catch(error){console.warn("Project recovery save failed:",error);}
+}
+async function restoreProjectState(){
+ try{
+  const db=await openProjectDB();
+  const state=await new Promise((resolve,reject)=>{
+   const tx=db.transaction("state","readonly"),request=tx.objectStore("state").get("current");
+   request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+  });
+  db.close();
+  if(!state)return;
+  generatedFiles=Array.isArray(state.files)?state.files:[];
+  currentProjectZip=state.zip||null;
+  generatedPackageName=state.packageName||"";
+  generatedAppName=state.appName||"";
+  currentBuildId=state.buildId||"";
+  if(currentProjectZip||generatedFiles.length){
+   $("result").style.display="block";
+   $("resultTitle").textContent="Android Project ZIP सुरक्षित है";
+   $("status").textContent="पिछली बार तैयार किया गया प्रोजेक्ट इस डिवाइस में सुरक्षित मिला।";
+   $("fileInfo").textContent="कुल "+(generatedFiles.length||"ZIP में मौजूद")+" files — प्रोजेक्ट वापस मिल गया।";
+   $("downloadBtn").hidden=false;$("buildBtn").hidden=false;
+   $("output").textContent=generatedFiles.map(file=>file.path).join("\n")||"सुरक्षित Project ZIP उपलब्ध है।";
+   dash("पिछला Android Project वापस मिल गया।","Refresh होने पर भी यह प्रोजेक्ट इस ब्राउज़र में सुरक्षित रखा गया है।","ZIP Ready",100,generatedFiles.length?generatedFiles.length+" files":"ZIP محفوظ");
+  }
+  if(currentBuildId){
+   $("result").style.display="block";
+   $("workflowLink").innerHTML="";
+   const link=document.createElement("a");
+   link.href="https://github.com/rk2512122-design/rk-ai-apk-builds/actions";
+   link.target="_blank";link.rel="noopener";link.textContent="GitHub पर Build का स्टेटस देखें";
+   $("workflowLink").replaceChildren(link);
+   setBuildMode(true);
+   $("status").textContent="पिछला APK Build फिर से जाँचा जा रहा है...";
+   checkBuildStatus();
+  }
+ }catch(error){console.warn("Project recovery failed:",error);}
+}
+async function blobToBase64(blob){
+ return new Promise((resolve,reject)=>{
+  const reader=new FileReader();
+  reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");
+  reader.onerror=()=>reject(new Error("ZIP पढ़ने में समस्या आई।"));
+  reader.readAsDataURL(blob);
+ });
+}
+
 let generatedPackageName="";
 let generatedAppName="";
 let generatedText="";
@@ -390,7 +459,7 @@ function updateIdeaCounter(){
 }
 $("idea").addEventListener("input",updateIdeaCounter);
 updateIdeaCounter();
-
+restoreProjectState();
 
 // Improved API response reader
 async function readResponse(response){
@@ -460,7 +529,7 @@ async function generateApp(){
  $("result").style.display="block";$("resultTitle").textContent="Project generation शुरू";$("status").textContent="आपका Idea Gemini को भेजा जा रहा है...";
  $("output").textContent="";$("fileInfo").textContent="";$("workflowLink").innerHTML="";
  $("downloadBtn").hidden=true;$("buildBtn").hidden=true;$("apkDownloadBtn").hidden=true;
- generatedFiles=[];generatedText="";currentBuildId="";
+ generatedFiles=[];generatedText="";currentBuildId="";currentProjectZip=null;
  if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}
  generationStartedAt=Date.now();generationFinishedAt=0;$("dashTimer").textContent="00:00";$("dashFiles").textContent="प्रतीक्षा";
  dash("Gemini से पूरा Android Project बनवाया जा रहा है।","Gemini का जवाब आने पर ZIP अपने आप तैयार की जा सकेगी।","Generating",10);
@@ -476,6 +545,8 @@ async function generateApp(){
    throw new Error("Gemini Project में valid Package Name नहीं मिला।");
   generatedText=JSON.stringify(data,null,2);stopGenerationTimer();
   const zipBlob=makeZip(generatedFiles);
+  currentProjectZip=zipBlob;
+  await saveProjectState();
   if(zipBlob.size>3*1024*1024)throw new Error("बनी हुई Project ZIP 3 MB से बड़ी है।");
   dash("Gemini की सभी मिली हुई files से ZIP तैयार है।","अब APK Build बटन दबाएँ या ZIP डाउनलोड करें।","ZIP Ready",100,generatedFiles.length+" files");
   $("resultTitle").textContent="Android Project ZIP तैयार है";
@@ -590,8 +661,8 @@ function makeZip(files){
 // Download project ZIP
 function downloadProject(){
 
- if(!generatedFiles.length){
-  alert("पहले AI से प्रोजेक्ट बनवाएँ।");
+ if(!generatedFiles.length&&!currentProjectZip){
+  alert("पहले AI से प्रोजेक्ट बनवाएँ या सुरक्षित ZIP वापस लाएँ।");
   return;
  }
 
@@ -647,25 +718,12 @@ async function buildApk(){
 
  try{
 
-  const blob=makeZip(generatedFiles);
+  const blob=currentProjectZip||makeZip(generatedFiles);
 
-  if(blob.size>3*1024*1024)
+  if(blob.size>4*1024*1024)
    throw new Error("ZIP 3 MB से बड़ी है। अभी छोटी ZIP से कोशिश करें।");
 
-  const base64=await new Promise((resolve,reject)=>{
-
-   const reader=new FileReader();
-
-   reader.onload=()=>{
-    resolve(String(reader.result).split(",")[1]);
-   };
-
-   reader.onerror=()=>{
-    reject(new Error("ZIP पढ़ने में समस्या आई।"));
-   };
-
-   reader.readAsDataURL(blob);
-  });
+  const base64=await blobToBase64(blob);
 
   $("status").textContent="GitHub पर प्रोजेक्ट भेजा जा रहा है...";
 
@@ -685,6 +743,8 @@ async function buildApk(){
    throw new Error("सर्वर ने Build ID नहीं भेजी।");
 
   currentBuildId=data.buildId;
+  currentProjectZip=blob;
+  await saveProjectState();
 
   $("status").textContent=
    "APK Build शुरू हो गया है। APK तैयार होने का इंतज़ार करें...";
@@ -820,12 +880,7 @@ async function uploadExistingZip(){
  currentBuildId="";pollAttempts=0;
  if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}
  try{
-  const base64=await new Promise((resolve,reject)=>{
-   const reader=new FileReader();
-   reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");
-   reader.onerror=()=>reject(new Error("ZIP फाइल पढ़ने में समस्या आई।"));
-   reader.readAsDataURL(file);
-  });
+  const base64=await blobToBase64(file);
   if(!base64)throw new Error("ZIP फाइल खाली है या पढ़ी नहीं जा सकी।");
   $("status").textContent="GitHub पर ZIP भेजी जा रही है...";
   const response=await fetch("/api/build",{
@@ -835,6 +890,9 @@ async function uploadExistingZip(){
   const data=await readResponse(response);
   if(!data.buildId)throw new Error("सर्वर ने Build ID नहीं भेजी।");
   currentBuildId=data.buildId;
+  generatedFiles=[];currentProjectZip=file;generatedAppName=appName||"Android-App";generatedPackageName=packageName;
+  await saveProjectState();
+  $("downloadBtn").hidden=false;$("buildBtn").hidden=false;
   $("status").textContent="APK Build शुरू हो गया है। कृपया प्रतीक्षा करें...";
   $("output").textContent=(data.message||"Build शुरू हुआ।")+"\\nZIP: "+(data.zipName||"")+"\\nBuild ID: "+currentBuildId;
   if(data.workflowUrl){
@@ -871,6 +929,8 @@ async function checkBuildStatus(){
   const data=await readResponse(response);
 
   if(data.status==="completed"){
+   setBuildMode(false);
+   saveProjectState();
 
    $("status").textContent=
     "🎉 आपकी APK तैयार है! अब डाउनलोड कर सकते हैं।";
@@ -889,6 +949,8 @@ async function checkBuildStatus(){
   }
 
   if(data.status==="failed"){
+   setBuildMode(false);
+   saveProjectState();
 
    $("status").textContent="APK Build असफल हो गया।";
    $("output").textContent=data.message||"Build में त्रुटि आई।";
