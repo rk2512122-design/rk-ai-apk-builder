@@ -178,19 +178,44 @@ a{
 ZIP डाउनलोड करें या APK Build शुरू करें।
 </p>
 
-<label for="idea">आपका ऐप आइडिया</label>
-
-<textarea
- id="idea"
- rows="9"
- maxlength="50000"
- placeholder="उदाहरण: मुझे एक AI Chatbot ऐप बनाकर दो जिसमें हिंदी और English में चैट कर सकूँ, AI से इमेज बना सकूँ, हर चैट अलग सेव हो और पुरानी चैट History से दोबारा खोल सकूँ।"
-></textarea>
+<section id="appBuilderOptions" style="margin:22px 0;padding:18px;border:1px solid #304b68;border-radius:14px;background:#101d30">
+<h2 style="margin-top:0;color:#18e5ee">🧩 आसान ऐप बनाने का तरीका</h2>
+<p class="note">ऐप का नाम लिखें, Category चुनें और अपनी जरूरत के फीचर चुनें। वेबसाइट इन जानकारियों को जोड़कर Gemini को भेजेगी।</p>
+<label for="appName">ऐप का नाम</label>
+<input id="appName" maxlength="80" placeholder="उदाहरण: RK PREMIUM FLASHLIGHT PRO">
+<label for="appCategory">ऐप की Category चुनें</label>
+<select id="appCategory">
+<option value="">Category चुनें</option>
+<option value="Flashlight">Flashlight</option>
+<option value="Notes">Notes / नोट्स</option>
+<option value="Calculator">Calculator</option>
+<option value="Music Player">Music Player</option>
+<option value="Photo Editor">Photo Editor</option>
+<option value="Video Player">Video Player</option>
+<option value="File Manager">File Manager</option>
+<option value="Fitness">Fitness / Health Tracker</option>
+<option value="Weather">Weather</option>
+<option value="Shopping">Shopping</option>
+<option value="Education">Education / Learning</option>
+<option value="Chat / AI">Chat / AI Assistant</option>
+<option value="Game">Game</option>
+<option value="Other">Other / अपनी Category</option>
+</select>
+<div id="featurePicker" style="display:none;margin-top:16px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+<strong id="featureHeading">फीचर्स चुनें</strong>
+<button type="button" id="selectAllFeatures" style="width:auto;padding:8px 12px;margin:0;background:#314766;color:white">सभी चुनें</button>
+</div>
+<div id="featureOptions" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px"></div>
+<p id="featureCount" class="small">0 फीचर चुने गए</p>
+</div>
+<label for="extraRequirements">अतिरिक्त जरूरतें (वैकल्पिक)</label>
+<textarea id="extraRequirements" rows="3" maxlength="10000" placeholder="जैसे: Dark Premium Design, Hindi भाषा, Offline काम करे..."></textarea>
+</section>
+<label for="idea">अपना पूरा आइडिया (वैकल्पिक)</label>
+<textarea id="idea" rows="7" maxlength="50000" placeholder="अगर आप चाहें तो यहाँ अपनी भाषा में अतिरिक्त जानकारी या पूरा Idea लिख सकते हैं।"></textarea>
 <p id="ideaCounter" class="small">0 / 50,000 कैरेक्टर</p>
-
-<p class="note">
-बस अपना आइडिया अपनी भाषा में लिखें। ऐप का नाम, कैटेगरी, डिजाइन, स्क्रीन और फीचर्स AI खुद समझकर तैयार करेगा।
-</p>
+<p class="note">ऊपर Category और फीचर चुनें या नीचे अपना पूरा Idea लिखें। दोनों की जानकारी Gemini को एक साथ भेजी जाएगी।</p>
 
 <button id="generateBtn" onclick="generateApp()">
 AI से पूरा ऐप बनवाएँ
@@ -282,6 +307,59 @@ function stopGenerationTimer(){generationFinishedAt=Date.now();tickGenerationTim
 
 const $=id=>document.getElementById(id);
 
+const categoryFeatures={
+ "Flashlight":["Flashlight ON/OFF","Brightness Control","SOS Signal","Strobe Light + Speed Control","Screen Light Colors","Battery Percentage & Temperature","Auto-Off Timer","Dark, Light & Premium Themes"],
+ "Notes":["Create Notes","Edit Notes","Delete Notes","Search Notes","Pin Important Notes","Categories / Folders","Auto Save","Dark & Light Themes"],
+ "Calculator":["Basic Calculations","Scientific Calculator","Calculation History","Percentage","Unit Conversion","Dark & Light Themes"],
+ "Music Player":["Play / Pause","Next / Previous Track","Playlist","Shuffle & Repeat","Background Playback","Equalizer","Audio Controls"],
+ "Photo Editor":["Crop & Rotate","Filters","Brightness & Contrast","Text on Photo","Stickers","Save Edited Photo","Share Photo"],
+ "Video Player":["Play / Pause","Seek & Timeline","Playback Speed","Subtitles","Fullscreen Mode","Video Playlist","Background Audio"],
+ "File Manager":["Browse Files","Search Files","Create Folders","Copy & Move","Rename Files","Delete Files","Sort & Filter"],
+ "Fitness":["Step Counter","Daily Goals","Activity History","Calories Estimate","Workout Timer","Progress Charts","Reminders"],
+ "Weather":["Current Weather","Hourly Forecast","7-Day Forecast","Search City","Temperature Units","Weather Alerts"],
+ "Shopping":["Product List","Search Products","Categories","Shopping Cart","Favorites","Order History","Price Summary"],
+ "Education":["Lessons","Quiz & Tests","Progress Tracking","Bookmarks","Search Topics","Learning Reminders"],
+ "Chat / AI":["Chat Screen","Conversation History","New Chat","Delete Conversations","Copy Messages","Hindi & English","Settings"],
+ "Game":["Home Screen","Game Levels","Score System","Pause & Resume","Sound Controls","Save Progress"],
+ "Other":["Home Dashboard","Settings Screen","Search","Notifications","User Preferences"]
+};
+function renderFeatureOptions(){
+ const category=$("appCategory").value,wrap=$("featurePicker"),list=$("featureOptions");
+ list.innerHTML="";
+ if(!category){wrap.style.display="none";return;}
+ wrap.style.display="block";$("featureHeading").textContent=category+" — फीचर्स चुनें";
+ (categoryFeatures[category]||[]).forEach(feature=>{
+  const label=document.createElement("label");
+  label.style.cssText="display:flex;align-items:center;gap:9px;margin:0;padding:10px;background:#0b1728;border:1px solid #30415d;border-radius:9px;font-weight:normal;font-size:14px";
+  const checkbox=document.createElement("input");
+  checkbox.type="checkbox";checkbox.className="feature-choice";checkbox.value=feature;checkbox.checked=true;
+  checkbox.style.cssText="width:18px;height:18px;margin:0;flex:0 0 auto";
+  checkbox.addEventListener("change",updateFeatureCount);
+  label.append(checkbox,document.createTextNode(feature));list.append(label);
+ });
+ updateFeatureCount();
+}
+function updateFeatureCount(){
+ $("featureCount").textContent=document.querySelectorAll(".feature-choice:checked").length+" फीचर चुने गए";
+}
+function buildCompleteIdea(){
+ const name=$("appName").value.trim(),category=$("appCategory").value;
+ const selected=[...document.querySelectorAll(".feature-choice:checked")].map(x=>x.value);
+ const extra=$("extraRequirements").value.trim(),manual=$("idea").value.trim();
+ const parts=[];
+ if(name)parts.push("App Name: "+name);
+ if(category)parts.push("App Category: "+category);
+ if(selected.length)parts.push("Requested features (implement each fully):\n- "+selected.join("\n- "));
+ if(category&&!selected.length)parts.push("Category selected: "+category+". Choose and implement the essential features for this app category.");
+ if(extra)parts.push("Additional requirements: "+extra);
+ if(manual)parts.push("User's additional app idea and instructions: "+manual);
+ return parts.join("\n\n").trim();
+}
+$("appCategory").addEventListener("change",renderFeatureOptions);
+$("selectAllFeatures").addEventListener("click",()=>{
+ document.querySelectorAll(".feature-choice").forEach(x=>x.checked=true);updateFeatureCount();
+});
+
 function updateIdeaCounter(){
  const length=Array.from($("idea").value).length;
  $("ideaCounter").textContent=length.toLocaleString("en-IN")+" / 50,000 कैरेक्टर";
@@ -352,8 +430,8 @@ function acceptGeminiFiles(files){
 
 // Generate Android project
 async function generateApp(){
- const idea=$("idea").value.trim();
- if(!idea){alert("पहले अपना ऐप आइडिया लिखें।");return;}
+ const idea=buildCompleteIdea();
+ if(!idea){alert("ऐप का नाम और Category चुनें या अपना Idea लिखें।");return;}
  const button=$("generateBtn");button.disabled=true;button.textContent="Gemini पूरा Android Project बना रहा है...";
  $("result").style.display="block";$("resultTitle").textContent="Project generation शुरू";$("status").textContent="आपका Idea Gemini को भेजा जा रहा है...";
  $("output").textContent="";$("fileInfo").textContent="";$("workflowLink").innerHTML="";
