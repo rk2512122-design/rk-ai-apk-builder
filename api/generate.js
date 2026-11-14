@@ -679,173 +679,57 @@ function parseJson(output) {
 
 
 function validateProject(project, res, appName, packageName) {
-  if (
-    !project ||
-    !Array.isArray(project.files) ||
-    project.files.length === 0
-  ) {
-    return res.status(502).json({ error: "No project files were returned." });
+  if (!project || !Array.isArray(project.files) || project.files.length === 0) {
+    return res.status(502).json({ error: "Gemini ने कोई Android project file नहीं लौटाई।" });
   }
 
+  // Only protect ZIP creation from unsafe paths, duplicate names and oversized data.
+  // Do not inspect feature evidence, Java syntax, Gradle setup, manifest resources,
+  // or require a predefined list of Android files before returning the project.
   if (project.files.length > MAX_FILES) {
-    return res.status(502).json({
-      error: "Too many project files were returned."
-    });
+    return res.status(413).json({ error: `Gemini ने ${MAX_FILES} से अधिक files लौटाईं।` });
   }
 
   const files = [];
   const seen = new Set();
+  let totalSize = 0;
 
-  for (const file of project.files) {
-    if (
-      !file ||
-      typeof file.path !== "string" ||
-      typeof file.content !== "string"
-    ) {
-      return res.status(502).json({ error: "Invalid project file." });
+  for (const item of project.files) {
+    if (!item || typeof item.path !== "string" || typeof item.content !== "string") {
+      return res.status(502).json({ error: "Gemini की file response का format सही नहीं है।" });
     }
 
-    const path = safePath(file.path);
+    const path = safePath(item.path);
     if (!path || seen.has(path)) {
-      return res.status(502).json({
-        error: "Unsafe or duplicate project path.",
-        details: file.path
-      });
+      return res.status(502).json({ error: "Gemini की file में invalid या duplicate path मिला।", details: item.path });
     }
 
     seen.add(path);
-    const content = file.content;
-    files.push({ path, content });
+    totalSize += Buffer.byteLength(item.content, "utf8");
+    files.push({ path, content: item.content });
   }
-
-  normalizeJavaFiles(files, packageName);
-  normalizePackageReferences(files, packageName);
-  normalizeGradlePackage(files, packageName);
-
-  // Canonicalize common root-relative path variants returned by the model.
-  for (const file of files) {
-    file.path = String(file.path || "").replace(/^\.\//, "").replace(/^\/+/, "");
-  }
-
-  // Supply a safe server-side launcher icon when Gemini omits or malforms it.
-  // This prevents a non-essential model omission from blocking an otherwise valid project.
-  const launcherIconPath = "app/src/main/res/drawable/ic_launcher.xml";
-  const fallbackLauncherIcon = `<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="#101827"
-        android:pathData="M0,0h108v108h-108z" />
-    <path
-        android:fillColor="#20C4D2"
-        android:pathData="M54,15a39,39 0,1 1,0 78a39,39 0,1 1,0 -78" />
-    <path
-        android:fillColor="#101827"
-        android:pathData="M54,31a23,23 0,1 1,0 46a23,23 0,1 1,0 -46" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M54,39l5.5,10.5 11.5,1.5 -8.5,8.2 2,11.5 -10.5,-5.5 -10.5,5.5 2,-11.5 -8.5,-8.2 11.5,-1.5z" />
-</vector>
-`;
-  let launcherIcon = files.find(file => file.path === launcherIconPath);
-  const hasValidLauncherIcon = launcherIcon &&
-    /<vector\b/.test(launcherIcon.content) &&
-    /<path\b/.test(launcherIcon.content) &&
-    /pathData\s*=/.test(launcherIcon.content);
-  if (!hasValidLauncherIcon) {
-    if (launcherIcon) launcherIcon.content = fallbackLauncherIcon;
-    else files.push({ path: launcherIconPath, content: fallbackLauncherIcon });
-  }
-
-  // Always point the manifest at the guaranteed drawable resource.
-  const manifestForIcon = files.find(file => file.path === "app/src/main/AndroidManifest.xml");
-  if (manifestForIcon && /<application\b/.test(manifestForIcon.content)) {
-    if (/android:icon\s*=\s*["'][^"']*["']/.test(manifestForIcon.content)) {
-      manifestForIcon.content = manifestForIcon.content.replace(
-        /android:icon\s*=\s*(["'])[^"']*\1/,
-        'android:icon="@drawable/ic_launcher"'
-      );
-    } else {
-      manifestForIcon.content = manifestForIcon.content.replace(
-        /<application\b/,
-        '<application android:icon="@drawable/ic_launcher"'
-      );
-    }
-  }
-
-  // The root Android Gradle plugin file is deterministic. Always create or
-  // replace it server-side so model omissions or malformed contents cannot
-  // prevent an otherwise valid Android project from being returned.
-  const rootGradle = files.find(file => file.path === "build.gradle");
-  const rootGradleContent = `plugins {
-    id 'com.android.application' version '8.6.1' apply false
-}
-`;
-  if (rootGradle) {
-    rootGradle.content = rootGradleContent;
-  } else {
-    files.push({ path: "build.gradle", content: rootGradleContent });
-  }
-
-  // Accept Gemini's returned project files without feature/source/build checks.
-  // Keep only safe-path, duplicate-path, file-count and total-size protections.
-  // Normalize common package/Gradle metadata where possible, but do not reject
-  // the project because a requested feature or conventional Android file is absent.
-  ensureGradleProperties(files);
-
-  const rootGradleContent = `plugins {
-    id 'com.android.application' version '8.6.1' apply false
-}
-`;
-  const rootGradle = files.find(file => file.path === "build.gradle");
-  if (rootGradle) rootGradle.content = rootGradleContent;
-  else files.push({ path: "build.gradle", content: rootGradleContent });
-
-  const settingsContent = `pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
-
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-
-rootProject.name = "RKGeneratedApp"
-include(":app")
-`;
-  const settingsFile = files.find(file => file.path === "settings.gradle");
-  if (settingsFile) settingsFile.content = settingsContent;
-  else files.push({ path: "settings.gradle", content: settingsContent });
-
-  const totalSize = files.reduce(
-    (sum, file) => sum + Buffer.byteLength(file.content, "utf8"),
-    0
-  );
 
   if (totalSize > MAX_PROJECT_SIZE) {
-    return res.status(413).json({ error: "Generated project is too large." });
+    return res.status(413).json({ error: "Gemini का Android project 2 MB से बड़ा है।" });
   }
+
+  // Use the package returned in the Gradle files for build identity when present.
+  const gradle = files.find(file => /(^|\/)app\/build\.gradle(?:\.kts)?$/i.test(file.path));
+  const gradleText = gradle?.content || "";
+  const namespaceMatch = gradleText.match(/\\bnamespace\\s*(?:=\\s*)?["']([^"']+)["']/);
+  const applicationIdMatch = gradleText.match(/\\bapplicationId\\s*(?:=\\s*)?["']([^"']+)["']/);
+  const detectedPackage = namespaceMatch?.[1] || applicationIdMatch?.[1] || packageName;
+  const finalPackageName = isValidPackage(detectedPackage) ? detectedPackage : packageName;
 
   return res.status(200).json({
     status: "completed",
     projectName: project.projectName || appName,
-    packageName,
+    packageName: finalPackageName,
     fileCount: files.length,
     files,
-    message: "Android project files received. No feature or source verification was performed."
+    message: "Gemini project files received. ZIP can now be created for APK build."
   });
 }
-
 
 const JAVA_RESERVED_WORDS = new Set([
   "abstract", "assert", "boolean", "break", "byte", "case", "catch",
