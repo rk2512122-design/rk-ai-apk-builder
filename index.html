@@ -668,7 +668,7 @@ function downloadProject(){
 
  try{
 
-  const blob=makeZip(generatedFiles);
+  const blob=currentProjectZip||makeZip(generatedFiles);
   const url=URL.createObjectURL(blob);
   const link=document.createElement("a");
 
@@ -694,8 +694,8 @@ function downloadProject(){
 // Start APK build
 async function buildApk(){
 
- if(!generatedFiles.length){
-  alert("पहले AI से ऐप बनवाएँ।");
+ if(!generatedFiles.length&&!currentProjectZip){
+  alert("पहले AI से ऐप बनवाएँ या सुरक्षित ZIP वापस लाएँ।");
   return;
  }
 
@@ -721,9 +721,11 @@ async function buildApk(){
   const blob=currentProjectZip||makeZip(generatedFiles);
 
   if(blob.size>4*1024*1024)
-   throw new Error("ZIP 3 MB से बड़ी है। अभी छोटी ZIP से कोशिश करें।");
+   throw new Error("ZIP 4 MB से बड़ी है। अभी छोटी ZIP से कोशिश करें।");
 
   const base64=await blobToBase64(blob);
+  currentProjectZip=blob;
+  await saveProjectState();
 
   $("status").textContent="GitHub पर प्रोजेक्ट भेजा जा रहा है...";
 
@@ -881,6 +883,8 @@ async function uploadExistingZip(){
  if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}
  try{
   const base64=await blobToBase64(file);
+  currentProjectZip=file;generatedFiles=[];generatedAppName=appName||"Android-App";generatedPackageName=packageName;
+  await saveProjectState();
   if(!base64)throw new Error("ZIP फाइल खाली है या पढ़ी नहीं जा सकी।");
   $("status").textContent="GitHub पर ZIP भेजी जा रही है...";
   const response=await fetch("/api/build",{
