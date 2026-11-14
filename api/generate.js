@@ -2,11 +2,11 @@ export const config = { maxDuration: 60 };
 
 
 const GEMINI_MODELS = [
-  // Use the same fast Flash-Lite model as the website chatbot first.
-  // Larger project output still takes longer than a short conversational reply.
+  // Prefer the stronger Flash model for multi-file Android code generation.
+  // Flash-Lite remains a fallback for quota/model availability failures.
+  "gemini-3.8-flash",
   "gemini-3.5-flash-lite",
-  "gemini-3.1-flash-lite",
-  "gemini-3.8-flash"
+  "gemini-3.1-flash-lite"
 ];
 const MAX_FILES = 80;
 const MAX_PROJECT_SIZE = 2 * 1024 * 1024;
@@ -376,7 +376,7 @@ Include every required file and complete content. No Markdown fences or text out
     });
   }
 
-  return validateProject(result.data, res, safeAppName, packageName);
+  return validateProject(result.data, res, safeAppName, packageName, safeFeatures);
 }
 
 
@@ -600,7 +600,7 @@ async function callGemini(apiKey, prompt, isRkSmartAssistant = false) {
           ],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: isRkSmartAssistant ? 24576 : 12000,
+            maxOutputTokens: isRkSmartAssistant ? 24576 : 20000,
             responseMimeType: "application/json"
           }
         }),
@@ -696,14 +696,10 @@ function parseJson(output) {
 }
 
 
-function validateProject(project, res, appName, packageName) {
+function validateProject(project, res, appName, packageName, userRequirements = "") {
   if (!project || !Array.isArray(project.files) || project.files.length === 0) {
     return res.status(502).json({ error: "Gemini ने कोई Android project file नहीं लौटाई।" });
   }
-
-  // Only protect ZIP creation from unsafe paths, duplicate names and oversized data.
-  // Do not inspect feature evidence, Java syntax, Gradle setup, manifest resources,
-  // or require a predefined list of Android files before returning the project.
   if (project.files.length > MAX_FILES) {
     return res.status(413).json({ error: `Gemini ने ${MAX_FILES} से अधिक files लौटाईं।` });
   }
@@ -711,33 +707,82 @@ function validateProject(project, res, appName, packageName) {
   const files = [];
   const seen = new Set();
   let totalSize = 0;
-
   for (const item of project.files) {
     if (!item || typeof item.path !== "string" || typeof item.content !== "string") {
       return res.status(502).json({ error: "Gemini की file response का format सही नहीं है।" });
     }
-
     const path = safePath(item.path);
     if (!path || seen.has(path)) {
       return res.status(502).json({ error: "Gemini की file में invalid या duplicate path मिला।", details: item.path });
     }
-
     seen.add(path);
     totalSize += Buffer.byteLength(item.content, "utf8");
     files.push({ path, content: item.content });
   }
-
   if (totalSize > MAX_PROJECT_SIZE) {
     return res.status(413).json({ error: "Gemini का Android project 2 MB से बड़ा है।" });
   }
 
-  // Use the package returned in the Gradle files for build identity when present.
-  const gradle = files.find(file => /(^|\/)app\/build\.gradle(?:\.kts)?$/i.test(file.path));
+  // A ZIP is not declared ready until the basic Android project structure exists.
+  const paths = new Set(files.map(f => f.path.replace(/^\.\//, "").toLowerCase()));
+  const requiredGroups = [
+    ["settings.gradle", "settings.gradle.kts"],
+    ["build.gradle", "build.gradle.kts"],
+    ["app/build.gradle", "app/build.gradle.kts"],
+    ["app/src/main/androidmanifest.xml"],
+    ["app/src/main/res/values/styles.xml", "app/src/main/res/values/themes.xml"],
+    ["app/src/main/java/"]
+  ];
+  const missing = [];
+  for (const group of requiredGroups) {
+    if (group[group.length - 1] === "app/src/main/java/") {
+      if (!files.some(f => /^app\/src\/main\/java\/.*\.java$/i.test(f.path))) missing.push("app/src/main/java/**.java");
+    } else if (!group.some(p => paths.has(p))) {
+      missing.push(group[0]);
+    }
+  }
+
+  const javaFiles = files.filter(f => f.path.toLowerCase().endsWith(".java"));
+  const javaText = javaFiles.map(f => f.content).join("\n");
+  const allText = files.map(f => f.content).join("\n");
+  const flashlightRequested = /flashlight|torch|फ्लैशलाइट|टॉर्च/i.test(userRequirements);
+  const missingFeatures = [];
+  if (flashlightRequested) {
+    const checks = [
+      ["Flashlight ON/OFF", /setTorchMode\s*\(/i],
+      ["Brightness capability handling", /setTorchStrengthLevel|FLASH_INFO_STRENGTH_MAXIMUM_LEVEL/i],
+      ["SOS signal", /sos|\.\.\.\s*[-–—]\s*[-–—]\s*[-–—]/i],
+      ["Strobe mode", /strobe/i],
+      ["Screen light colors", /Color\.parseColor|setBackgroundColor|screen.?light/i],
+      ["Battery percentage/temperature", /ACTION_BATTERY_CHANGED|EXTRA_TEMPERATURE|EXTRA_LEVEL/i],
+      ["Auto-off timer", /CountDownTimer|postDelayed|ScheduledExecutorService/i],
+      ["Theme switching", /theme|dark.?mode|setTheme/i]
+    ];
+    for (const [label, pattern] of checks) {
+      if (!pattern.test(javaText)) missingFeatures.push(label);
+    }
+  }
+
+  // Validate Java delimiter balance and obvious unresolved XML resource references.
+  const malformedJava = javaFiles.filter(f => !checkJavaBraces(f.content)).map(f => f.path);
+  const gradle = files.find(file => /^app\/build\.gradle(?:\.kts)?$/i.test(file.path));
   const gradleText = gradle?.content || "";
   const namespaceMatch = gradleText.match(/\bnamespace\s*(?:=\s*)?["']([^"']+)["']/);
   const applicationIdMatch = gradleText.match(/\bapplicationId\s*(?:=\s*)?["']([^"']+)["']/);
   const detectedPackage = namespaceMatch?.[1] || applicationIdMatch?.[1] || packageName;
   const finalPackageName = isValidPackage(detectedPackage) ? detectedPackage : packageName;
+
+  if (missing.length || missingFeatures.length || malformedJava.length) {
+    return res.status(422).json({
+      error: "Gemini का Android Project अधूरा मिला। इसे ZIP Ready नहीं किया गया।",
+      validation: {
+        missingRequiredFiles: missing,
+        missingFeatureEvidence: missingFeatures,
+        javaSyntaxStructureIssues: malformedJava
+      },
+      message: "कृपया दोबारा Generate करें। इस बार वेबसाइट अधूरी project files को सफल ZIP नहीं बताएगी।"
+    });
+  }
 
   return res.status(200).json({
     status: "completed",
@@ -745,7 +790,8 @@ function validateProject(project, res, appName, packageName) {
     packageName: finalPackageName,
     fileCount: files.length,
     files,
-    message: "Gemini project files received. ZIP can now be created for APK build."
+    validation: { passed: true, requiredStructure: true, featureEvidence: flashlightRequested ? "present" : "not-applicable" },
+    message: "Project structure and requested feature evidence passed pre-ZIP checks. APK build is still required to verify compilation and runtime behavior."
   });
 }
 
