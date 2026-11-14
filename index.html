@@ -1065,6 +1065,7 @@ async function copyResult(){
   if((!message&&!selected.length)||busy)return;
   if(!active())createChat(false);
   const visibleMessage=message||(selected.length?"कृपया संलग्न फाइल देखें।":"");
+  const projectMode=/\b(apk|android\s*app|android\s*project)\b|एपीके|एंड्रॉयड ऐप|एंड्रॉइड ऐप|ऐप बनाओ|ऐप बना दो|प्रोजेक्ट बनाओ|प्रोजेक्ट तैयार/i.test(visibleMessage);
   input.value="";
   add("user",visibleMessage+(selected.length?" [संलग्न: "+selected.map(f=>f.name).join(", ")+"]":""));
   busy=true;el("chatSend").disabled=true;el("chatSend").textContent="...";
@@ -1080,14 +1081,15 @@ async function copyResult(){
     else{item.data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");reader.onerror=()=>reject(new Error("फाइल पढ़ी नहीं जा सकी।"));reader.readAsDataURL(file);});}
     attachments.push(item);
    }
-   const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:visibleMessage||"संलग्न फाइल का विश्लेषण करें।",history,attachments,webSearch:el("chatWebSearch").checked,codeExecution:el("chatCodeExecution").checked})});
+   const r=await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:visibleMessage||"संलग्न फाइल का विश्लेषण करें।",history,attachments,webSearch:el("chatWebSearch").checked,codeExecution:el("chatCodeExecution").checked,projectMode})});
    const d=await readResponse(r),answer=String(d.reply||d.response||d.answer||"").trim();
    if(!answer)throw new Error("AI से खाली जवाब मिला।");
    add("assistant",answer);
-   if(/\\b(apk|android\\s*app|app|project|zip)\\b|एपीके|ऐप बनाओ|ऐप बना दो|प्रोजेक्ट बनाओ|ऐप तैयार/i.test(visibleMessage)){
+   if(projectMode){
+    const chat=active();chat.projectRaw=answer;save();
     const bubble=el("chatMessages").lastElementChild;
-    const hint=document.createElement("p");hint.textContent="आप Android Project और ZIP बनवाना चाहते हैं? नीचे दिए बटन से इस बातचीत को Project Generator में भेजें।";hint.style.fontSize="13px";
-    const action=document.createElement("button");action.type="button";action.textContent="इस बातचीत से Android Project + ZIP बनाएं";action.style.marginTop="8px";action.addEventListener("click",()=>el("chatBuildApp").click());
+    const hint=document.createElement("p");hint.textContent="प्रोजेक्ट फाइलें एक ही बार में तैयार की गई हैं। अब वेबसाइट इन्हें ZIP में assemble करेगी; Gemini को दोबारा नहीं भेजा जाएगा।";hint.style.fontSize="13px";
+    const action=document.createElement("button");action.type="button";action.textContent="इस बातचीत की फाइलों से ZIP बनाएं";action.style.marginTop="8px";action.addEventListener("click",()=>el("chatBuildApp").click());
     bubble.append(hint,action);
    }
    if(Array.isArray(d.citations)&&d.citations.length){
@@ -1102,7 +1104,28 @@ async function copyResult(){
  el("chatSend").addEventListener("click",send);el("chatInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}});
  el("exportChatBtn").addEventListener("click",()=>{const c=active();if(!c||!c.messages.length){alert("इस बातचीत में अभी कोई संदेश नहीं है।");return}const text="# "+(c.title||"RK AI Chat")+"\\n\\n"+c.messages.map(m=>(m.role==="user"?"## आप":"## RK AI Assistant")+"\\n\\n"+m.text).join("\\n\\n---\\n\\n");const blob=new Blob([text],{type:"text/markdown;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=(c.title||"rk-ai-chat").replace(/[^a-z0-9_-]+/gi,"_")+".md";a.click();setTimeout(()=>URL.revokeObjectURL(url),10000)});el("newChatBtn").addEventListener("click",()=>createChat());el("chatHistory").addEventListener("change",e=>{activeId=e.target.value;renderMessages()});
  el("deleteChatBtn").addEventListener("click",()=>{if(!active()||!confirm("क्या आप इस बातचीत को हटाना चाहते हैं?"))return;chats=chats.filter(c=>c.id!==activeId);if(!chats.length)createChat(false);else activeId=chats[0].id;save();renderAll()});
- el("chatBuildApp").addEventListener("click",()=>{const c=active();if(!c||!c.messages.some(m=>m.role==="user")){alert("पहले चैट में अपनी Android ऐप की जरूरत बताइए।");return}const transcript=c.messages.map(m=>(m.role==="user"?"यूज़र: ":"AI: ")+m.text).join("\n\n");$("idea").value="इस बातचीत के आधार पर पूरी Android ऐप बनाएं और यूज़र की सभी आवश्यकताओं को लागू करें।\n\n"+transcript;updateIdeaCounter();$("idea").scrollIntoView({behavior:"smooth",block:"center"});if(confirm("बातचीत Android ऐप के निर्देशों में जोड़ दी गई है। क्या Gemini से Android Project बनवाना शुरू करें?"))generateApp()});
+ el("chatBuildApp").addEventListener("click",async()=>{
+  const c=active();if(!c||!c.projectRaw){alert("इस बातचीत में तैयार project files नहीं मिलीं। ऐप बनाने का अनुरोध दोबारा भेजें।");return;}
+  try{
+   const raw=c.projectRaw;
+   const re=/\[\[FILE:\s*([^\]]+)\]\]\s*([\s\S]*?)\s*\[\[END FILE\]\]/g;
+   const files=[];let match;
+   while((match=re.exec(raw))!==null)files.push({path:match[1].trim(),content:match[2].replace(/^\s*\n/,"").replace(/\n\s*$/,"")});
+   const pkg=(raw.match(/\[\[PACKAGE:\s*([^\]]+)\]\]/i)||[])[1]||"";
+   const name=(raw.match(/\[\[PROJECT NAME:\s*([^\]]+)\]\]/i)||[])[1]||"Android-App";
+   generatedFiles=acceptGeminiFiles(files);generatedPackageName=pkg.trim();generatedAppName=name.trim();
+   if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName))throw new Error("Package Name नहीं मिला।");
+   if(generatedFiles.length>80)throw new Error("80 से अधिक files मिलीं।");
+   generatedText=JSON.stringify({projectName:generatedAppName,packageName:generatedPackageName,files:generatedFiles});
+   currentBuildId="";currentProjectZip=makeZip(generatedFiles);
+   if(currentProjectZip.size>3*1024*1024)throw new Error("ZIP 3 MB से बड़ी है।");
+   $("idea").value=generatedAppName;updateIdeaCounter();$("result").style.display="block";
+   $("resultTitle").textContent="Chatbot की files से ZIP तैयार";$("status").textContent="वेबसाइट ने Gemini को दोबारा बुलाए बिना ZIP बना दी।";
+   $("fileInfo").textContent="कुल "+generatedFiles.length+" files — ZIP तैयार है।";$("output").textContent=generatedFiles.map(file=>file.path).join("\n");
+   $("downloadBtn").hidden=false;$("buildBtn").hidden=false;$("apkDownloadBtn").hidden=true;$("result").scrollIntoView({behavior:"smooth",block:"center"});
+   await saveProjectBackup(currentProjectZip);await saveProjectState();
+  }catch(error){alert("ZIP नहीं बन सकी: "+error.message);}
+ });
  function load(){try{const v=JSON.parse(localStorage.getItem(KEY)||"[]");chats=Array.isArray(v)?v.filter(c=>c&&c.id&&Array.isArray(c.messages)):[]}catch{chats=[]}if(!chats.length)createChat(false);else activeId=chats[0].id;renderAll()}load();
 })();
 </script>
