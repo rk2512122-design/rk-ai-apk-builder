@@ -1096,8 +1096,9 @@ include(":app")
     projectName: project.projectName || appName,
     packageName,
     fileCount: files.length,
+    featureChecklist: featureValidation.verified,
     files,
-    message: "Android project generated and validated."
+    message: "Android project generated and feature evidence validated."
   });
 }
 
