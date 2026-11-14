@@ -93,6 +93,20 @@ button:disabled{
  font-size:13px;
 }
 
+/* Live project generation dashboard */
+#progressDashboard{display:none;margin-top:18px;padding:18px;border:1px solid #31516b;border-radius:16px;background:linear-gradient(145deg,#101d32,#142b42);box-shadow:0 12px 30px rgba(0,0,0,.22)}
+#progressDashboard.active{display:block}
+.dashTop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dashPill{font-size:12px;padding:6px 10px;border-radius:99px;background:#123c3e;color:#69f0c1}
+.dashMetrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:15px 0}
+.dashMetric{padding:13px;border-radius:12px;background:#0b1728;border:1px solid #263e59}
+.dashMetric span{display:block;color:#aabbd2;font-size:12px}
+.dashMetric strong{display:block;font-size:25px;margin-top:5px;color:#eafaff;font-variant-numeric:tabular-nums}
+.dashTrack{height:9px;background:#26374d;border-radius:99px;overflow:hidden;margin:10px 0}
+#dashBar{height:100%;width:0;background:linear-gradient(90deg,#18bfc9,#57e39b);border-radius:99px;transition:width .25s}
+#dashStage{font-size:14px;color:#d8e8f8;line-height:1.5}
+#dashDetail{font-size:12px;color:#9eb2ca;margin-top:6px}
+@media(max-width:420px){#progressDashboard{padding:14px}.dashMetric strong{font-size:22px}}
 .status{color:#57e39b}
 .note{color:#c3d0e4;font-size:14px}
 .small{color:#aabbd2;font-size:12px}
@@ -138,6 +152,7 @@ AI से पूरा ऐप बनवाएँ
 <strong id="resultTitle">AI का जवाब</strong>
 
 <p id="status" class="status"></p>
+<div id="progressDashboard" aria-live="polite"><div class="dashTop"><strong>⚡ Live Generation Monitor</strong><span id="dashPill" class="dashPill">Ready</span></div><div class="dashMetrics"><div class="dashMetric"><span>बीता हुआ समय</span><strong id="dashTimer">00:00</strong></div><div class="dashMetric"><span>तैयार हुई फाइलें</span><strong id="dashFiles">—</strong></div></div><div class="dashTrack"><div id="dashBar"></div></div><div id="dashStage">आपका प्रोजेक्ट शुरू होने की प्रतीक्षा में है।</div><div id="dashDetail">वास्तविक फाइल संख्या Gemini का जवाब मिलने के बाद दिखाई जाएगी।</div></div>
 
 <div id="fileInfo"></div>
 <div id="workflowLink"></div>
@@ -210,6 +225,11 @@ let generatedText="";
 let currentBuildId="";
 let pollTimer=null;
 let pollAttempts=0;
+let generationStartedAt=0,generationFinishedAt=0,generationTimer=null;
+function elapsedText(ms){const s=Math.max(0,Math.floor(ms/1000)),h=Math.floor(s/3600),m=Math.floor(s%3600/60),r=s%60;return h?[h,m,r].map(v=>String(v).padStart(2,"0")).join(":"):[m,r].map(v=>String(v).padStart(2,"0")).join(":");}
+function tickGenerationTimer(){if(generationStartedAt)$("dashTimer").textContent=elapsedText((generationFinishedAt||Date.now())-generationStartedAt);}
+function dash(stage,detail,pill,percent,files){$("progressDashboard").classList.add("active");$("dashStage").textContent=stage;$("dashDetail").textContent=detail;$("dashPill").textContent=pill;$("dashBar").style.width=percent+"%";if(files!==undefined)$("dashFiles").textContent=files;}
+function stopGenerationTimer(){generationFinishedAt=Date.now();tickGenerationTimer();if(generationTimer){clearInterval(generationTimer);generationTimer=null;}}
 
 const $=id=>document.getElementById(id);
 
@@ -263,7 +283,7 @@ async function readResponse(response){
 }
 
 
-function validateFiles(files){
+function validateFiles(files,onProgress){
 
  if(!Array.isArray(files)||files.length===0)
   throw new Error("AI ने कोई प्रोजेक्ट फाइल नहीं बनाई।");
@@ -296,6 +316,7 @@ function validateFiles(files){
 
   seen.add(path);
   file.path=path;
+  if(onProgress)onProgress(seen.size,files.length);
 
   total+=new TextEncoder().encode(file.content).length;
  }
@@ -322,90 +343,39 @@ function validateFiles(files){
 
 // Generate Android project
 async function generateApp(){
-
  const idea=$("idea").value.trim();
-
- if(!idea){
-  alert("पहले अपना ऐप आइडिया लिखें।");
-  return;
- }
-
- const button=$("generateBtn");
-
- button.disabled=true;
- button.textContent="AI पूरा ऐप तैयार कर रहा है...";
-
- $("result").style.display="block";
- $("resultTitle").textContent="प्रोजेक्ट जनरेशन शुरू";
- $("status").textContent="Gemini AI से संपर्क हो रहा है...";
- $("output").textContent="";
- $("fileInfo").textContent="";
- $("workflowLink").innerHTML="";
-
- $("downloadBtn").hidden=true;
- $("buildBtn").hidden=true;
- $("apkDownloadBtn").hidden=true;
-
- generatedFiles=[];
- generatedText="";
- currentBuildId="";
-
- if(pollTimer){
-  clearTimeout(pollTimer);
-  pollTimer=null;
- }
-
+ if(!idea){alert("पहले अपना ऐप आइडिया लिखें।");return;}
+ const button=$("generateBtn");button.disabled=true;button.textContent="AI पूरा ऐप तैयार कर रहा है...";
+ $("result").style.display="block";$("resultTitle").textContent="प्रोजेक्ट जनरेशन शुरू";$("status").textContent="Gemini AI से संपर्क हो रहा है...";
+ $("output").textContent="";$("fileInfo").textContent="";$("workflowLink").innerHTML="";
+ $("downloadBtn").hidden=true;$("buildBtn").hidden=true;$("apkDownloadBtn").hidden=true;
+ generatedFiles=[];generatedText="";currentBuildId="";
+ if(pollTimer){clearTimeout(pollTimer);pollTimer=null;}
+ generationStartedAt=Date.now();generationFinishedAt=0;$("dashTimer").textContent="00:00";$("dashFiles").textContent="प्रतीक्षा";
+ dash("Gemini AI पूरा Android प्रोजेक्ट तैयार कर रहा है।","जवाब आने तक वास्तविक फाइल संख्या उपलब्ध नहीं होती।","Generating",10);
+ if(generationTimer)clearInterval(generationTimer);generationTimer=setInterval(tickGenerationTimer,1000);tickGenerationTimer();
  try{
-
-  const response=await fetch("/api/generate",{
-   method:"POST",
-   headers:{"Content-Type":"application/json"},
-   body:JSON.stringify({ idea })
-  });
-
+  const response=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idea})});
   const data=await readResponse(response);
-
-  if(data.status!=="completed")
-   throw new Error("AI प्रोजेक्ट पूरा नहीं हुआ।");
-
-  generatedFiles=validateFiles(data.files);
-  generatedPackageName=String(data.packageName||"").trim();
-  generatedAppName=String(data.projectName||"").trim();
-  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName)) throw new Error("प्रोजेक्ट का स्थायी Package Name नहीं मिला।");
-  generatedText=JSON.stringify(data,null,2);
-
-  $("resultTitle").textContent="Android प्रोजेक्ट तैयार है";
-  $("status").textContent="सफलतापूर्वक फाइलें तैयार हो गईं।";
-
-  $("fileInfo").textContent=
-   "कुल "+generatedFiles.length+" फाइलें तैयार हुईं।";
-
-  $("output").textContent=
-   generatedFiles.map(file=>file.path).join("\n");
-
-  $("downloadBtn").hidden=false;
-  $("buildBtn").hidden=false;
-
+  if(data.status!=="completed")throw new Error("AI प्रोजेक्ट पूरा नहीं हुआ।");
+  if(!Array.isArray(data.files)||!data.files.length)throw new Error("AI ने कोई प्रोजेक्ट फाइल नहीं बनाई।");
+  $("dashFiles").textContent="0 / "+data.files.length;
+  dash("Gemini का जवाब मिल गया। फाइलों की जाँच हो रही है।","प्राप्त फाइलों को एक-एक करके validate किया जा रहा है।","Validating",65);
+  generatedFiles=validateFiles(data.files,(done,total)=>{$("dashFiles").textContent=done+" / "+total;dash("प्रोजेक्ट फाइलों की जाँच चल रही है।",done+" में से "+total+" फाइलें जाँची गईं।","Validating",65+Math.round(done/total*25));});
+  generatedPackageName=String(data.packageName||"").trim();generatedAppName=String(data.projectName||"").trim();
+  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName))throw new Error("प्रोजेक्ट का स्थायी Package Name नहीं मिला।");
+  generatedText=JSON.stringify(data,null,2);stopGenerationTimer();
+  dash("Android प्रोजेक्ट सफलतापूर्वक तैयार और जाँच लिया गया।","कुल "+generatedFiles.length+" फाइलें तैयार हुईं। अब ZIP डाउनलोड या APK Build कर सकते हैं।","Completed",100,generatedFiles.length+" / "+generatedFiles.length);
+  $("resultTitle").textContent="Android प्रोजेक्ट तैयार है";$("status").textContent="सफलतापूर्वक फाइलें तैयार हुईं। कुल समय: "+elapsedText(generationFinishedAt-generationStartedAt);
+  $("fileInfo").textContent="कुल "+generatedFiles.length+" फाइलें तैयार हुईं।";$("output").textContent=generatedFiles.map(file=>file.path).join("\n");
+  $("downloadBtn").hidden=false;$("buildBtn").hidden=false;
  }catch(error){
-
-  generatedFiles=[];
-
-  $("resultTitle").textContent="त्रुटि";
-  $("status").textContent="प्रोजेक्ट तैयार नहीं हुआ।";
-
-  const errorMessage = error && error.message === "Failed to fetch"
-   ? "सर्वर से कनेक्शन टूट गया। इंटरनेट जाँचें और 30 सेकंड बाद दोबारा कोशिश करें। यदि बार-बार हो, तो सर्वर की सीमा या Gemini की उपलब्धता जाँचनी होगी।"
-   : (error.message || "अज्ञात API Error");
-
-  $("output").textContent=errorMessage;
-
- }finally{
-
-  button.disabled=false;
-  button.textContent="AI से पूरा ऐप बनवाएँ";
- }
+  stopGenerationTimer();generatedFiles=[];
+  dash("प्रोजेक्ट जनरेशन पूरा नहीं हो सका।","समय: "+elapsedText(generationFinishedAt-generationStartedAt)+" | "+(error.message||"अज्ञात त्रुटि"),"Failed",100);
+  $("resultTitle").textContent="त्रुटि";$("status").textContent="प्रोजेक्ट तैयार नहीं हुआ।";
+  $("output").textContent=error&&error.message==="Failed to fetch"?"सर्वर से कनेक्शन टूट गया। इंटरनेट जाँचें और दोबारा कोशिश करें।":(error.message||"अज्ञात API Error");
+ }finally{button.disabled=false;button.textContent="AI से पूरा ऐप बनवाएँ";}
 }
-
 
 // ZIP generator
 function makeZip(files){
