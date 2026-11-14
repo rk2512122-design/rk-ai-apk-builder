@@ -120,9 +120,10 @@ ZIP डाउनलोड करें या APK Build शुरू करे�
 <textarea
  id="idea"
  rows="9"
- maxlength="5000"
+ maxlength="50000"
  placeholder="उदाहरण: मुझे एक AI Chatbot ऐप बनाकर दो जिसमें हिंदी और English में चैट कर सकूँ, AI से इमेज बना सकूँ, हर चैट अलग सेव हो और पुरानी चैट History से दोबारा खोल सकूँ।"
 ></textarea>
+<p id="ideaCounter" class="small">0 / 50,000 कैरेक्टर</p>
 
 <p class="note">
 बस अपना आइडिया अपनी भाषा में लिखें। ऐप का नाम, कैटेगरी, डिजाइन, स्क्रीन और फीचर्स AI खुद समझकर तैयार करेगा।
@@ -211,6 +212,13 @@ let pollTimer=null;
 let pollAttempts=0;
 
 const $=id=>document.getElementById(id);
+
+function updateIdeaCounter(){
+ const length=Array.from($("idea").value).length;
+ $("ideaCounter").textContent=length.toLocaleString("en-IN")+" / 50,000 कैरेक्टर";
+}
+$("idea").addEventListener("input",updateIdeaCounter);
+updateIdeaCounter();
 
 
 // Improved API response reader
