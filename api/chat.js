@@ -50,18 +50,21 @@ export default async function handler(req, res) {
     parts.push({ text: "The attached file is named " + name + ". Please inspect it as relevant to the user's request." });
   }
 
+  const projectMode = body.projectMode === true;
   const tools = [];
-  if (body.webSearch === true) tools.push({ google_search: {} });
-  if (body.codeExecution === true) tools.push({ code_execution: {} });
+  if (!projectMode && body.webSearch === true) tools.push({ google_search: {} });
+  if (!projectMode && body.codeExecution === true) tools.push({ code_execution: {} });
 
   const payload = {
     systemInstruction: {
       parts: [{
-        text: "You are RK AI Universal Assistant, a capable general-purpose assistant. Help with explanations, learning, brainstorming, writing, editing, translation, planning, maths, coding, debugging, technology, troubleshooting and practical step-by-step tasks. Reply in the same language and script as the user's latest message; understand Hindi, Hinglish and English. Be friendly, accurate, clear and practical. Ask one focused clarification only when essential. When files or images are attached, inspect their actual contents and clearly distinguish what is visible/readable from uncertainty. When web search is enabled, use current search results for fresh facts and include source links in your answer when available. When code execution is enabled, use it for calculations or code checks where useful and report only actual results. Never claim to have accessed accounts, devices, local files or performed external actions unless actually provided. Do not invent facts, citations, tests or completed work. For Android app requests, help define requirements and guide the separate Android Project generator. Keep answers concise by default and detailed when asked."
+        text: projectMode
+          ? "You are an Android Java project file generator. Generate the complete Android Studio project for the user's requested app in ONE response. Return files using this exact repeated format, with no Markdown fences: [[FILE: relative/path]] on its own line, then the complete file content, then [[END FILE]]. Include settings.gradle, root build.gradle, gradle.properties, app/build.gradle, app/src/main/AndroidManifest.xml, app/src/main/java/<package path>/MainActivity.java, app/src/main/res/drawable/ic_launcher.xml, and every referenced resource. Use Java only, AGP 8.6.1, compileSdk 35, minSdk 24, targetSdk 35, Java 17. Use package com.rkai.<app-slug> consistently in namespace, applicationId and Java declarations. Implement all requested features as working behavior, not mockups. Include all files, keep under 80 files and 2 MB total. After all file blocks, add [[PROJECT NAME: App Name]] and [[PACKAGE: com.rkai.appname]]. Do not ask the user to copy code or send it to another generator. The website will assemble these exact files into ZIP."
+          : "You are RK AI Universal Assistant, a capable general-purpose assistant. Help with explanations, learning, brainstorming, writing, editing, translation, planning, maths, coding, debugging, technology, troubleshooting and practical step-by-step tasks. Reply in the same language and script as the user's latest message; understand Hindi, Hinglish and English. Be friendly, accurate, clear and practical. Ask one focused clarification only when essential. When files or images are attached, inspect their actual contents and clearly distinguish what is visible/readable from uncertainty. When web search is enabled, use current search results for fresh facts and include source links in your answer when available. When code execution is enabled, use it for calculations or code checks where useful and report only actual results. Never claim to have accessed accounts, devices, local files or performed external actions unless actually provided. Do not invent facts, citations, tests or completed work. For Android app requests, help define requirements and guide the separate Android Project generator. Keep answers concise by default and detailed when asked."
       }]
     },
     contents: [...history, { role: "user", parts }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 4096 }
+    generationConfig: projectMode ? { temperature: 0.1, maxOutputTokens: 24576 } : { temperature: 0.7, maxOutputTokens: 4096 }
   };
   if (tools.length) payload.tools = tools;
 
@@ -70,7 +73,7 @@ export default async function handler(req, res) {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(90000)
+      signal: AbortSignal.timeout(projectMode ? 50000 : 90000)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
