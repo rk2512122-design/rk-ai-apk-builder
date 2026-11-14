@@ -341,7 +341,7 @@ function acceptGeminiFiles(files){
  return files.map(file=>{
   if(!file||typeof file.path!=="string"||typeof file.content!=="string")
    throw new Error("Gemini की file response का format सही नहीं है।");
-  const path=file.path.replace(/\\\\/g,"/").replace(/^\\.\\//,"").trim();
+  const path=file.path.replace(/\\/g,"/").replace(/^\.\//,"").trim();
   if(!path||path.startsWith("/")||path.split("/").includes("..")||!/^[a-zA-Z0-9_./-]+$/.test(path))
    throw new Error("असुरक्षित file path मिला।");
   if(seen.has(path))throw new Error("Duplicate file path मिला।");
@@ -370,7 +370,7 @@ async function generateApp(){
   generatedFiles=acceptGeminiFiles(data.files);
   generatedPackageName=String(data.packageName||"").trim();
   generatedAppName=String(data.projectName||"").trim();
-  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName))
+  if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(generatedPackageName))
    throw new Error("Gemini Project में valid Package Name नहीं मिला।");
   generatedText=JSON.stringify(data,null,2);stopGenerationTimer();
   const zipBlob=makeZip(generatedFiles);
