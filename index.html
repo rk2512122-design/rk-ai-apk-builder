@@ -309,6 +309,7 @@ APK बनाने के लिए GitHub Build System का उपयोग 
 
 let generatedFiles=[];
 let currentProjectZip=null;
+let savedProjectId="";
 const PROJECT_DB="rk-ai-apk-builder";
 function openProjectDB(){
  return new Promise((resolve,reject)=>{
@@ -324,7 +325,7 @@ async function saveProjectState(){
   await new Promise((resolve,reject)=>{
    const tx=db.transaction("state","readwrite");
    tx.objectStore("state").put({
-    files:generatedFiles,zip:currentProjectZip,packageName:generatedPackageName,
+    files:generatedFiles,zip:currentProjectZip,projectId:savedProjectId,packageName:generatedPackageName,
     appName:generatedAppName,buildId:currentBuildId,updatedAt:Date.now()
    },"current");
    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
@@ -343,6 +344,8 @@ async function restoreProjectState(){
   if(!state)return;
   generatedFiles=Array.isArray(state.files)?state.files:[];
   currentProjectZip=state.zip||null;
+  savedProjectId=state.projectId||"";
+  if(!currentProjectZip&&savedProjectId){const backup=await fetch("/api/project-download?projectId="+encodeURIComponent(savedProjectId));if(backup.ok)currentProjectZip=await backup.blob();}
   generatedPackageName=state.packageName||"";
   generatedAppName=state.appName||"";
   currentBuildId=state.buildId||"";
@@ -367,6 +370,14 @@ async function restoreProjectState(){
    checkBuildStatus();
   }
  }catch(error){console.warn("Project recovery failed:",error);}
+}
+async function saveProjectBackup(blob){
+ try{
+  const base64=await blobToBase64(blob);
+  const response=await fetch("/api/save-project",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({zipBase64:base64})});
+  const data=await readResponse(response);
+  savedProjectId=data.projectId||"";
+ }catch(error){console.warn("Server project backup unavailable; browser recovery remains enabled:",error);}
 }
 async function blobToBase64(blob){
  return new Promise((resolve,reject)=>{
@@ -546,6 +557,7 @@ async function generateApp(){
   generatedText=JSON.stringify(data,null,2);stopGenerationTimer();
   const zipBlob=makeZip(generatedFiles);
   currentProjectZip=zipBlob;
+  await saveProjectBackup(zipBlob);
   await saveProjectState();
   if(zipBlob.size>3*1024*1024)throw new Error("बनी हुई Project ZIP 3 MB से बड़ी है।");
   dash("Gemini की सभी मिली हुई files से ZIP तैयार है।","अब APK Build बटन दबाएँ या ZIP डाउनलोड करें।","ZIP Ready",100,generatedFiles.length+" files");
@@ -725,6 +737,7 @@ async function buildApk(){
 
   const base64=await blobToBase64(blob);
   currentProjectZip=blob;
+  await saveProjectBackup(blob);
   await saveProjectState();
 
   $("status").textContent="GitHub पर प्रोजेक्ट भेजा जा रहा है...";
@@ -884,6 +897,7 @@ async function uploadExistingZip(){
  try{
   const base64=await blobToBase64(file);
   currentProjectZip=file;generatedFiles=[];generatedAppName=appName||"Android-App";generatedPackageName=packageName;
+  await saveProjectBackup(file);
   await saveProjectState();
   if(!base64)throw new Error("ZIP फाइल खाली है या पढ़ी नहीं जा सकी।");
   $("status").textContent="GitHub पर ZIP भेजी जा रही है...";
