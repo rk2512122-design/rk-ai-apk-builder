@@ -712,7 +712,7 @@ async function uploadExistingZip(){
  if(!file){alert("पहले ZIP फाइल चुनें।");return;}
  if(!file.name.toLowerCase().endsWith(".zip")){alert("कृपया .zip फाइल चुनें।");return;}
  if(file.size>4*1024*1024){alert("ZIP 4 MB से बड़ी है। अभी 4 MB तक की ZIP अपलोड करें।");return;}
- if(!/^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(packageName)){
+ if(!/^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$/.test(packageName)){
   alert("Package Name सही लिखें, जैसे com.rkai.smartlifemanager");return;
  }
  const button=$("uploadBuildBtn");
