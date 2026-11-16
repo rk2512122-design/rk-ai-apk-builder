@@ -187,7 +187,7 @@ a{
 <h1>⚡ RK AI APK Builder</h1>
 
 <p>
-अपना ऐप आइडिया लिखें। AI से पूरा Android प्रोजेक्ट बनवाएँ,
+अपना ऐप आइडिया लिखें या Android / Unity गेम प्रोजेक्ट ZIP अपलोड करें,
 ZIP डाउनलोड करें या APK Build शुरू करें।
 </p>
 
@@ -196,7 +196,7 @@ ZIP डाउनलोड करें या APK Build शुरू करे�
 <p class="note">ऐप का नाम लिखें, Category चुनें और अपनी जरूरत के फीचर चुनें। वेबसाइट इन जानकारियों को जोड़कर Gemini को भेजेगी।</p>
 <label for="appName">ऐप का नाम</label>
 <input id="appName" maxlength="80" placeholder="उदाहरण: RK PREMIUM FLASHLIGHT PRO">
-<label for="appCategory">ऐप की Category चुनें</label>
+<label for="appCategory">ऐप / गेम की Category चुनें</label>
 <select id="appCategory">
 <option value="">Category चुनें</option>
 <option value="Flashlight">Flashlight</option>
@@ -883,7 +883,7 @@ document.addEventListener("DOMContentLoaded",()=>{
  });
 });
 
-// Upload an existing Android Studio project ZIP and start its APK build.
+// Upload an existing Android / Unity project ZIP and start its APK build.
 async function uploadExistingZip(){
  const file=$("projectZip").files[0];
  const appName=$("uploadAppName").value.trim();
@@ -933,7 +933,7 @@ async function uploadExistingZip(){
   $("status").textContent="ZIP अपलोड या Build शुरू नहीं हो सका।";
   $("output").textContent=error.message||"अज्ञात त्रुटि";
  }finally{
-  button.disabled=false;button.textContent="📦 ZIP अपलोड करके APK बनाएँ";
+  button.disabled=false;button.textContent="🚀 चुनी हुई ZIP से APK Build शुरू करें";
  }
 }
 
