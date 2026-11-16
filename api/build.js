@@ -1,6 +1,3 @@
-import { inflateRawSync } from "node:zlib";
-
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -60,7 +57,7 @@ export default async function handler(req, res) {
     });
   }
 
-  // Detect Unity projects from ZIP entries; inflate only the small ProjectSettings asset.
+  // A Unity project contains ProjectSettings/ProjectVersion.txt; Android Studio projects do not.
   function inspectUnityZip(buffer) {
     let eocd = -1;
     for (let p = Math.max(0, buffer.length - 65557); p <= buffer.length - 22; p++) {
@@ -71,39 +68,16 @@ export default async function handler(req, res) {
     let offset = buffer.readUInt32LE(eocd + 16);
     for (let i = 0; i < count; i++) {
       if (offset + 46 > buffer.length || buffer.readUInt32LE(offset) !== 0x02014b50) break;
-      const method = buffer.readUInt16LE(offset + 10);
-      const compressedSize = buffer.readUInt32LE(offset + 20);
       const nameLength = buffer.readUInt16LE(offset + 28);
       const extraLength = buffer.readUInt16LE(offset + 30);
       const commentLength = buffer.readUInt16LE(offset + 32);
-      const localOffset = buffer.readUInt32LE(offset + 42);
-      const name = buffer.toString("utf8", offset + 46, offset + 46 + nameLength).replace(/\\\\/g, "/");
+      const name = buffer.toString("utf8", offset + 46, offset + 46 + nameLength).replace(/\\/g, "/");
       offset += 46 + nameLength + extraLength + commentLength;
-      if (!/(^|\\/)ProjectSettings\\/ProjectVersion\\.txt$/i.test(name)) continue;
-      const assetName = name.replace(/ProjectVersion\\.txt$/i, "ProjectSettings.asset");
-      // The package identity is normally stored in ProjectSettings.asset.
-      // Locate its central-directory record and read just that file.
-      let scan = buffer.readUInt32LE(eocd + 16);
-      for (let j = 0; j < count; j++) {
-        if (scan + 46 > buffer.length || buffer.readUInt32LE(scan) !== 0x02014b50) break;
-        const m = buffer.readUInt16LE(scan + 10), size = buffer.readUInt32LE(scan + 20);
-        const nl = buffer.readUInt16LE(scan + 28), el = buffer.readUInt16LE(scan + 30), cl = buffer.readUInt16LE(scan + 32), lo = buffer.readUInt32LE(scan + 42);
-        const nm = buffer.toString("utf8", scan + 46, scan + 46 + nl).replace(/\\\\/g, "/");
-        scan += 46 + nl + el + cl;
-        if (nm !== assetName) continue;
-        const dataStart = lo + 30 + buffer.readUInt16LE(lo + 26) + buffer.readUInt16LE(lo + 28);
-        const packed = buffer.subarray(dataStart, dataStart + size);
-        const raw = m === 0 ? packed : (m === 8 ? inflateRawSync(packed) : null);
-        if (!raw) return true;
-        const text = raw.toString("utf8");
-        return /applicationIdentifier:[\\s\\S]{0,600}?Android:\\s*[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)+/.test(text);
-      }
-      return true;
+      if (/(^|\/)ProjectSettings\/ProjectVersion\.txt$/i.test(name)) return true;
     }
     return false;
   }
   const isUnityProject = inspectUnityZip(zipBuffer);
-
   const owner = "rk2512122-design";
   const repo = "rk-ai-apk-builds";
   const branch = "main";
