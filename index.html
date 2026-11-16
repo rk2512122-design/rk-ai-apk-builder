@@ -825,7 +825,7 @@ function showSelectedZip(file){
  });
 }
 
-// Extract Gradle package identity from a normal Android project ZIP.
+// Detect Android package identity from native Android Studio or Unity ZIP projects.
 async function detectPackageNameFromZip(file){
  const bytes=await file.arrayBuffer();
  const view=new DataView(bytes),u8=new Uint8Array(bytes),decoder=new TextDecoder("utf-8");
@@ -835,7 +835,8 @@ async function detectPackageNameFromZip(file){
  }
  if(eocd<0)throw new Error("ZIP directory नहीं मिली");
  const count=view.getUint16(eocd+10,true),centralOffset=view.getUint32(eocd+16,true);
- let pos=centralOffset;
+ let pos=centralOffset,gradleApp="",gradleNamespace="",manifestPackage="",unityPackage="";
+ const validPackage=value=>/^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/.test(value||"");
  for(let n=0;n<count;n++){
   if(pos+46>u8.length||view.getUint32(pos,true)!==0x02014b50)break;
   const method=view.getUint16(pos+10,true),compressedSize=view.getUint32(pos+20,true);
@@ -843,8 +844,11 @@ async function detectPackageNameFromZip(file){
   const localOffset=view.getUint32(pos+42,true);
   const name=decoder.decode(u8.slice(pos+46,pos+46+nameLen)).replace(/\\/g,"/");
   pos+=46+nameLen+extraLen+commentLen;
-  if(!/(^|\/)app\/build\.gradle(\.kts)?$/i.test(name))continue;
-  if(view.getUint32(localOffset,true)!==0x04034b50)continue;
+  const isGradle=/(^|\/)build\.gradle(\.kts)?$/i.test(name);
+  const isManifest=/(^|\/)AndroidManifest\.xml$/i.test(name);
+  const isUnity=/ProjectSettings\/ProjectSettings\.asset$/i.test(name);
+  if(!isGradle&&!isManifest&&!isUnity)continue;
+  if(localOffset+30>u8.length||view.getUint32(localOffset,true)!==0x04034b50)continue;
   const localNameLen=view.getUint16(localOffset+26,true),localExtraLen=view.getUint16(localOffset+28,true);
   const dataStart=localOffset+30+localNameLen+localExtraLen;
   const compressed=u8.slice(dataStart,dataStart+compressedSize);
@@ -855,14 +859,24 @@ async function detectPackageNameFromZip(file){
    const stream=new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
    data=new Uint8Array(await new Response(stream).arrayBuffer());
   }else continue;
-  const gradle=decoder.decode(data);
-  const ns=gradle.match(/\bnamespace\s*(?:=\s*)?["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
-  const app=gradle.match(/\bapplicationId\s*(?:=\s*)?["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
-  if(ns&&app&&ns[1]!==app[1])throw new Error("namespace और applicationId अलग हैं");
-  if(ns)return ns[1];
-  if(app)return app[1];
+  const source=decoder.decode(data);
+  if(isGradle){
+   const ns=source.match(/\bnamespace\s*(?:=\s*)?["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
+   const app=source.match(/\bapplicationId\s*(?:=\s*)?["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
+   if(app&&validPackage(app[1])&&!gradleApp)gradleApp=app[1];
+   if(ns&&validPackage(ns[1])&&!gradleNamespace)gradleNamespace=ns[1];
+  }else if(isManifest){
+   const match=source.match(/\bpackage\s*=\s*["']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)["']/);
+   if(match&&validPackage(match[1])&&!manifestPackage)manifestPackage=match[1];
+  }else if(isUnity){
+   const patterns=[
+    /bundleIdentifier:\s*([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)/,
+    /applicationIdentifier:[\s\S]{0,500}?Android:\s*([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+)/
+   ];
+   for(const pattern of patterns){const match=source.match(pattern);if(match&&validPackage(match[1])){unityPackage=match[1];break;}}
+  }
  }
- return "";
+ return gradleApp||manifestPackage||unityPackage||gradleNamespace||"";
 }
 
 // Allow dropping a ZIP onto the upload area as well as browsing folders.
