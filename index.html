@@ -818,7 +818,7 @@ function showSelectedZip(file){
    $("uploadPackageName").value=packageName;
    $("zipFileName").textContent="✓ "+file.name+" — Package Name: "+packageName;
   }else{
-   $("zipFileName").textContent="⚠ "+file.name+" चुनी गई, लेकिन Gradle में namespace/applicationId नहीं मिला।";
+   $("zipFileName").textContent="⚠ "+file.name+" चुनी गई, लेकिन Android/Unity प्रोजेक्ट में Package Name नहीं मिला।";
   }
  }).catch(error=>{
   $("zipFileName").textContent="⚠ "+file.name+" चुनी गई, लेकिन ZIP पढ़ने में समस्या: "+error.message;
